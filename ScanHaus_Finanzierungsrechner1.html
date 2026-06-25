@@ -1,0 +1,2132 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finanzierungs-Navigator · CEB Bankshop AG</title>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Inter Tight"', '-apple-system', 'sans-serif'],
+          display: ['Fraunces', 'Georgia', 'serif'],
+        },
+        colors: {
+          cream: '#eef4fb',
+          navy: { DEFAULT: '#143a6b', 2: '#1f57a0' },
+          'navy-2': '#1f57a0',
+          gold: { DEFAULT: '#1796d3', light: '#7cc4ec', dark: '#0d6ea0' },
+          ink: { 300: '#a8a29e', 400: '#78716c', 500: '#57534e', 600: '#44403c', 700: '#292524', 800: '#1c1917' },
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { font-family: 'Inter Tight', sans-serif; -webkit-font-smoothing: antialiased; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  em { font-style: italic; }
+  .bg-gradient-radial { background: radial-gradient(circle, var(--tw-gradient-stops)); }
+  html { scroll-behavior: smooth; }
+
+  /* ===== PDF-DRUCKANSICHT ===== */
+  /* Standardmäßig versteckt — wird nur im @media print sichtbar */
+  .print-only { display: none; }
+
+  @media print {
+    @page { size: A4; margin: 12mm 15mm; }
+    html, body {
+      background: #ffffff !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    /* Tool-UI komplett verstecken (Wrapper mit Klasse 'no-print') */
+    .no-print { display: none !important; }
+    /* Print-Container sichtbar machen */
+    .print-only {
+      display: block !important;
+      position: static !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .print-page { page-break-after: always; }
+    .print-page:last-child { page-break-after: auto; }
+    .print-avoid-break { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body class="bg-cream">
+<div id="root"></div>
+
+<script type="text/babel" data-type="module">
+const { useState, useMemo, useEffect } = React;
+
+/* ============================================================================
+   KONDITIONEN-CONFIG
+   ============================================================================ */
+const konditionen = {
+
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║  WÖCHENTLICH AKTUALISIEREN                                           ║
+  // ║  Hier die Zinsen und das Datum anpassen, wenn sich was ändert.       ║
+  // ║  Format: { ZINSBINDUNG_JAHRE: SOLLZINS_PROZENT }                     ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
+  stand: '2026-06-25',                                              // <-- Datum der letzten Anpassung
+  bankzinsen: {
+    5:  3.85,                                                       // 5 Jahre Zinsbindung
+    10: 3.73,                                                       // 10 Jahre Zinsbindung
+    15: 3.84,                                                       // 15 Jahre Zinsbindung
+    20: 4.20,                                                       // 20 Jahre Zinsbindung
+    30: 4.40,                                                       // 30 Jahre Zinsbindung
+  },
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║  ENDE der wöchentlichen Anpassung                                    ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
+
+  defaults: {
+    tilgung: 2.0, zinsbindung: 10, laufzeit: 35, nebenkostenquote: 10.0,
+    wertentwicklung: 2.0,
+  },
+  // Haushaltspauschalen (€/Monat) — Bank-übliche Kalkulation
+  haushalt: {
+    erwachsener_1: 850,        // erste Person
+    erwachsener_2: 400,        // 2. Person → Paar = 1.250 €
+    erwachsener_weitere: 400,  // jede weitere
+    hausunterhalt: 300,        // pauschal
+    kind: 0,                   // Kindergeld kompensiert
+  },
+  anbieter: {
+    name: 'CEB Bankshop AG',
+    nameZusatz: 'Vermittlung von Bankdienstleistungen',
+    claim: 'Unabhängige Baufinanzierung',
+    adresse: { strasse: 'Stallbaumstraße 11', plzOrt: '04155 Leipzig' },
+    telefon: '0341 / 590 84-0',
+    telefonAnzeige: '+49 341 590840',
+    telefax: '0341 / 590 84-99',
+    email: 'info@bankshop.de',
+    web: 'www.bankshop.de',
+    handelsregister: 'Amtsgericht Leipzig, HRB 22885',
+    steuerNr: '232/100/00623',
+    vorstand: 'Sven Thom, Nils Thom',
+    aufsichtsrat: 'RA Dr. Michael Schulte',
+    erlaubnisHinweis: 'Immobiliardarlehensvermittler gemäß § 34i Abs. 1 Satz 1 GewO',
+    registrierungsnummer: 'D-W-159-Q68C-94',
+    registerbehoerde: 'IHK Leipzig',
+    erlaubnisbehoerde: 'Stadt Leipzig, Ordnungsamt Abt. Sicherheitsbehörde',
+    schlichtungsstelle: 'BaFin – Referat Q21, Graurheindorfer Straße 108, 53117 Bonn',
+    impressumUrl: 'https://www.bankshop.de/impressum.html',
+    datenschutzUrl: 'https://www.bankshop.de/datenschutz.html',
+  },
+
+  // ============== PERSONALISIERUNG ==============
+  // Zwei unabhängige Blöcke:
+  //   OBEN (Navi):   Hausbaufirma + Hausverkäufer
+  //   UNTEN (CTA):   Finanzierer + Link
+  // Leere Felder werden nicht angezeigt.
+  vermittler: {
+    // OBEN: Hausverkäufer-Block
+    hausbaufirma:   null,   // z. B. 'Musterhaus GmbH'
+    hausverkaeufer: null,   // z. B. 'Peter Schmidt'
+
+    // UNTEN: Finanzierer / Bankshop-Berater
+    finanziererName:    null,   // z. B. 'Andreas Müller'
+    finanziererTelefon: null,   // z. B. '0341 / 590 84-12'
+    cta_url:            null,   // personalisierter Selbstauskunfts-Link
+  },
+  kfw300: {
+    name: 'KfW 300 – Wohneigentum für Familien',
+    aktiv: true,
+    zins: 1.51,
+    staffelung: {
+      1: { maxEinkommen:  90000, basis: 170000, qng: 220000 },
+      2: { maxEinkommen: 100000, basis: 170000, qng: 220000 },
+      3: { maxEinkommen: 110000, basis: 200000, qng: 250000 },
+      4: { maxEinkommen: 120000, basis: 200000, qng: 250000 },
+      5: { maxEinkommen: 130000, basis: 220000, qng: 270000 },
+    },
+    einkommensgrenzeProWeiteremKind: 10000,
+  },
+  // KfW 297/298 – Klimafreundlicher Neubau (Fallback wenn KfW 300 nicht möglich)
+  // 297 = selbst genutzt, 298 = Ersterwerb. Wir behandeln beide gleich, weil für die
+  // Berechnung dieselben Konditionen gelten.
+  kfw297: {
+    name: 'KfW 297/298 – Klimafreundlicher Neubau',
+    aktiv: true,
+    // Aktuelle Konditionen ab März 2026 (Stand: KfW)
+    zins: 2.50,        // konservativer Standardwert (manuelle Pflege in der Admin)
+    zinsEh55: 1.00,    // 1,0 % bei EH 55 (befristet bis 30.06.2026)
+    // Maximalbeträge pro Wohneinheit
+    maxEh40: 100000,         // EH 40 ohne QNG
+    maxEh40Qng: 150000,      // EH 40 mit QNG
+    maxEh55: 100000,         // EH 55 (befristet)
+  },
+  ui: {
+    cta: {
+      label: 'Jetzt Machbarkeit und Konditionen kostenfrei prüfen lassen',
+      url: '#selbstauskunft',
+      hinweis: 'Wir prüfen für Sie kostenfrei und unverbindlich die Machbarkeit und die besten Konditionen — über 750 Banken und auf Wunsch auch Ihre Hausbank. Sie erhalten Ihr persönliches Ergebnis innerhalb von 48 Stunden.',
+    },
+  },
+};
+
+/* ============================================================================
+   BERECHNUNGSLOGIK
+   ============================================================================ */
+function monatsrate(d, z, t) { if (d <= 0) return 0; return (d * (z + t) / 100) / 12; }
+function darlehenAusRate(r, z, t) { if ((z + t) <= 0 || r <= 0) return 0; return (r * 12 * 100) / (z + t); }
+function restschuldNachJahren(d, z, t, j) {
+  if (d <= 0) return 0;
+  const q = 1 + z / 100, a = d * (z + t) / 100, qn = Math.pow(q, j);
+  if (q === 1) return Math.max(0, d - a * j);
+  return Math.max(0, d * qn - a * (qn - 1) / (q - 1));
+}
+function tilgungsdauer(d, z, t) {
+  if (d <= 0 || (z + t) <= 0) return 0;
+  const q = 1 + z / 100, a = d * (z + t) / 100;
+  if (q === 1) return d / a;
+  const ratio = a / (a - d * (q - 1));
+  if (ratio <= 0) return Infinity;
+  return Math.log(ratio) / Math.log(q);
+}
+function immobilienwert(kp, w, j) { return kp * Math.pow(1 + w / 100, j); }
+
+/**
+ * Prüft Förderfähigkeit und ermittelt KfW 300 Förderdarlehen.
+ *
+ * Berücksichtigt:
+ *  - mind. 1 Kind im Haushalt
+ *  - klimafreundlicher Neubau (Pflicht)
+ *  - Einkommensgrenze (90.000 € bei 1 Kind, +10.000 € je weiteres Kind)
+ *  - QNG ja/nein → höherer Kreditbetrag
+ *  - Förderprogramm im Config aktiviert
+ *
+ * Liefert { foerderfaehig: bool, grund?: string, darlehen?: {...} }
+ */
+function pruefeKfW300(k, opt) {
+  if (!k.kfw300.aktiv) return { foerderfaehig: false, grund: 'Förderung deaktiviert' };
+  if (!opt.foerdermittelAktiv) return { foerderfaehig: false, grund: 'Förderdarlehen abgewählt' };
+  if (opt.bestehendesWohneigentum) return { foerderfaehig: false, grund: 'Bestehendes Wohneigentum schließt KfW 300 aus' };
+  if (!opt.klimaNeubau) return { foerderfaehig: false, grund: 'Klimafreundlicher Neubau (Effizienzhaus 40) ist Voraussetzung' };
+  if (opt.kinder < 1) return { foerderfaehig: false, grund: 'Mindestens 1 Kind unter 18 erforderlich' };
+
+  // Staffelung holen — bei mehr als 5 Kindern wird die ab-5-Stufe verwendet
+  const stufe = k.kfw300.staffelung[Math.min(opt.kinder, 5)];
+  // Einkommensgrenze: ab 5 Kindern +10.000 € je weiterem Kind
+  let einkommensgrenze = stufe.maxEinkommen;
+  if (opt.kinder > 5) {
+    einkommensgrenze += (opt.kinder - 5) * k.kfw300.einkommensgrenzeProWeiteremKind;
+  }
+  if (opt.zuVersteuerndesEinkommen > einkommensgrenze) {
+    return {
+      foerderfaehig: false,
+      grund: `Haushaltseinkommen überschreitet die Grenze von ${new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(einkommensgrenze)} € (bei ${opt.kinder} Kind${opt.kinder !== 1 ? 'ern' : ''})`,
+      einkommensgrenze,
+    };
+  }
+
+  const maxBetrag = opt.qng ? stufe.qng : stufe.basis;
+  return {
+    foerderfaehig: true,
+    einkommensgrenze,
+    darlehen: {
+      key: 'kfw_300',
+      name: k.kfw300.name,
+      maxBetrag,
+      zins: k.kfw300.zins,
+      qng: opt.qng,
+    },
+  };
+}
+
+/**
+ * KfW 297/298 – Klimafreundlicher Neubau
+ * Voraussetzungen: Effizienzhaus 40 oder 55 (befristet bis 30.06.2026).
+ * Keine Einkommensgrenze, keine Familienbeschränkung, kein Verbot bei Voreigentum.
+ * 297 = selbst genutzt, 298 = Ersterwerb — Konditionen identisch.
+ */
+function pruefeKfW297(k, opt) {
+  if (!k.kfw297.aktiv) return { foerderfaehig: false, grund: 'Programm deaktiviert' };
+  if (!opt.foerdermittelAktiv) return { foerderfaehig: false, grund: 'Förderdarlehen abgewählt' };
+  if (!opt.klimaNeubau) return { foerderfaehig: false, grund: 'Klimafreundlicher Neubau (Effizienzhaus 40 oder 55) ist Voraussetzung' };
+
+  const maxBetrag = opt.qng ? k.kfw297.maxEh40Qng : k.kfw297.maxEh40;
+  return {
+    foerderfaehig: true,
+    darlehen: {
+      key: 'kfw_297',
+      name: k.kfw297.name,
+      maxBetrag,
+      zins: k.kfw297.zins,
+      qng: opt.qng,
+    },
+  };
+}
+
+/**
+ * Wählt automatisch die beste verfügbare KfW-Förderung.
+ * Vorrang hat KfW 300 (höhere Beträge bei Familien), Fallback auf 297/298.
+ * KfW 300 kann NICHT mit 297/298 kombiniert werden.
+ */
+function pruefeBesteKfWFoerderung(k, opt) {
+  const r300 = pruefeKfW300(k, opt);
+  if (r300.foerderfaehig) return { ...r300, gewaehltesProgramm: 'kfw_300', alternativeGeprueft: 'kfw_297' };
+
+  const r297 = pruefeKfW297(k, opt);
+  if (r297.foerderfaehig) {
+    return {
+      ...r297,
+      gewaehltesProgramm: 'kfw_297',
+      grund300: r300.grund, // Warum 300 nicht ging — für UI-Transparenz
+      einkommensgrenze: r300.einkommensgrenze,
+    };
+  }
+  // Nichts förderfähig
+  return { foerderfaehig: false, grund: r297.grund || r300.grund, einkommensgrenze: r300.einkommensgrenze };
+}
+
+function mischzins(teile) {
+  const s = teile.reduce((a, t) => a + (t.betrag || 0), 0);
+  if (s <= 0) return 0;
+  return teile.reduce((a, t) => a + (t.betrag || 0) * (t.zins || 0), 0) / s;
+}
+
+/**
+ * Berechnet die monatliche Pauschale für Lebenshaltung nach Bank-Standard.
+ * - 1. Person:      850 €
+ * - 2. Person: +    400 € (Paar gesamt = 1.250 €)
+ * - ab 3.:    +    400 € je weiterer Erwachsener
+ * - + 300 € Hausunterhalt
+ * - Kinder: 0 € (Kindergeld kompensiert Ausgaben)
+ */
+function haushaltspauschale(k, erwachsene) {
+  const h = k.haushalt;
+  if (erwachsene <= 0) return 0;
+  let p = h.erwachsener_1;
+  if (erwachsene >= 2) p += h.erwachsener_2;
+  if (erwachsene >= 3) p += (erwachsene - 2) * h.erwachsener_weitere;
+  p += h.hausunterhalt;
+  return p;
+}
+
+/**
+ * Tragfähige Monatsrate aus echter Haushaltsrechnung.
+ * = Haushaltsnetto − Lebenshaltung − bestehende Kreditraten
+ */
+function tragfaehigeRate(k, eingaben) {
+  const pauschale = haushaltspauschale(k, eingaben.erwachsene);
+  return Math.max(0, eingaben.haushaltsnetto - pauschale - (eingaben.bestehendeKreditraten || 0));
+}
+
+function berechneFinanzierung(modus, eingaben, k) {
+  const {
+    haushaltsnetto = 0, zuVersteuerndesEinkommen = 0,
+    eigenkapital = 0, maxRate = 0, hauspreis = 0,
+    erwachsene = 2, bestehendeKreditraten = 0,
+    nebenkostenQ = k.defaults.nebenkostenquote, tilgung = k.defaults.tilgung,
+    zinsbindung = k.defaults.zinsbindung, wertentwicklung = k.defaults.wertentwicklung,
+    foerdermittelAktiv = true, kinder = 0, klimaNeubau = false, qng = false,
+    bankzinsOverride = null,
+    kfwZinsOverride = null,
+  } = eingaben;
+  // Bankzins: manueller Wert hat Vorrang, sonst Default aus Konditionen
+  const bankzins = (bankzinsOverride != null && bankzinsOverride > 0)
+    ? bankzinsOverride
+    : (k.bankzinsen[zinsbindung] ?? k.bankzinsen[10]);
+
+  // Haushaltsrechnung
+  const pauschale = haushaltspauschale(k, erwachsene);
+  const tragRate = tragfaehigeRate(k, { haushaltsnetto, erwachsene, bestehendeKreditraten });
+
+  // KfW: Beste verfügbare Förderung wählen (300 → wenn möglich, sonst 297/298)
+  const kfwResult = pruefeBesteKfWFoerderung(k, { foerdermittelAktiv, kinder, klimaNeubau, qng, zuVersteuerndesEinkommen, bestehendesWohneigentum: eingaben.bestehendesWohneigentum });
+
+  // KfW-Zins: manueller Wert hat Vorrang, sonst Default aus Konditionen
+  if (kfwResult.foerderfaehig && kfwZinsOverride != null && kfwZinsOverride > 0) {
+    kfwResult.darlehen = { ...kfwResult.darlehen, zins: kfwZinsOverride };
+  }
+
+  let budget = 0, benoetigtesNetto = 0, monatlicheRate = 0;
+  let bankdarlehen = 0, gesamtdarlehen = 0;
+  let foerderbetrag = 0;
+  let kfwGenutzt = null;
+
+  if (modus === 'budget') {
+    // ===== MODUS 1: Was kann ich mir leisten? =====
+    monatlicheRate = Math.min(maxRate > 0 ? maxRate : tragRate, tragRate);
+
+    if (kfwResult.foerderfaehig) {
+      foerderbetrag = kfwResult.darlehen.maxBetrag;
+      const rateFoerder = monatsrate(foerderbetrag, kfwResult.darlehen.zins, tilgung);
+      const verbleibendeRate = Math.max(0, monatlicheRate - rateFoerder);
+      bankdarlehen = darlehenAusRate(verbleibendeRate, bankzins, tilgung);
+      kfwGenutzt = { ...kfwResult.darlehen, betrag: foerderbetrag };
+    } else {
+      bankdarlehen = darlehenAusRate(monatlicheRate, bankzins, tilgung);
+    }
+    gesamtdarlehen = bankdarlehen + foerderbetrag;
+    budget = (gesamtdarlehen + eigenkapital) / (1 + nebenkostenQ / 100);
+
+  } else {
+    // ===== MODUS 2: Passt dieses Haus zu mir? =====
+    const gesamtkosten = hauspreis * (1 + nebenkostenQ / 100);
+    const finanzierungsbedarf = Math.max(0, gesamtkosten - eigenkapital);
+
+    if (kfwResult.foerderfaehig) {
+      foerderbetrag = Math.min(kfwResult.darlehen.maxBetrag, finanzierungsbedarf);
+      kfwGenutzt = { ...kfwResult.darlehen, betrag: foerderbetrag };
+    }
+    bankdarlehen = Math.max(0, finanzierungsbedarf - foerderbetrag);
+    gesamtdarlehen = bankdarlehen + foerderbetrag;
+
+    const rateBank = monatsrate(bankdarlehen, bankzins, tilgung);
+    const rateFoerder = foerderbetrag > 0 ? monatsrate(foerderbetrag, k.kfw300.zins, tilgung) : 0;
+    monatlicheRate = rateBank + rateFoerder;
+
+    // Erforderliches Netto = Rate + Pauschale + bestehende Kreditraten
+    benoetigtesNetto = monatlicheRate + pauschale + bestehendeKreditraten;
+    budget = hauspreis;
+  }
+
+  // Mischzins
+  const teile = [{ betrag: bankdarlehen, zins: bankzins }];
+  if (foerderbetrag > 0) teile.push({ betrag: foerderbetrag, zins: k.kfw300.zins });
+  const mZins = mischzins(teile);
+
+  const restschuld10 = restschuldNachJahren(gesamtdarlehen, mZins, tilgung, 10);
+  const restschuld20 = restschuldNachJahren(gesamtdarlehen, mZins, tilgung, 20);
+  const laufzeitJahre = tilgungsdauer(gesamtdarlehen, mZins, tilgung);
+  const wert10 = immobilienwert(budget, wertentwicklung, 10);
+  const wert20 = immobilienwert(budget, wertentwicklung, 20);
+
+  let foerdervorteil = 0;
+  if (foerderbetrag > 0 && bankzins > 0 && kfwGenutzt) {
+    foerdervorteil = (monatsrate(foerderbetrag, bankzins, tilgung) - monatsrate(foerderbetrag, kfwGenutzt.zins, tilgung)) * 12 * zinsbindung;
+  }
+
+  const eigenkapitalquote = budget > 0 ? (eigenkapital / budget) * 100 : 0;
+  const finanzierungsquote = budget > 0 ? (gesamtdarlehen / budget) * 100 : 0;
+
+  // Frei verfügbar nach Rate
+  const freiNachRate = tragRate - monatlicheRate;
+
+  // Ampel — auf Basis der echten Haushaltsrechnung
+  let ampel = 'gruen', ampelText = 'Die Ersteinschätzung wirkt solide. Mit diesen Werten haben Sie eine gute Ausgangsbasis für die persönliche Prüfung.';
+  if (modus === 'budget') {
+    if (budget <= 0 || tragRate <= 0) { ampel = 'rot'; ampelText = 'Nach Abzug der typischen Haushaltskosten bleibt aktuell zu wenig Spielraum für eine Rate. Eine persönliche Prüfung kann hier Wege aufzeigen.'; }
+    else if (eigenkapitalquote < 10) { ampel = 'gelb'; ampelText = 'Das Eigenkapital ist gering. Eine persönliche Prüfung mit unseren Bankenpartnern lohnt sich.'; }
+    else if (eigenkapitalquote < 20) { ampel = 'gelb'; ampelText = 'Die Konstellation ist grundsätzlich machbar — sollte aber individuell geprüft werden.'; }
+  } else {
+    if (haushaltsnetto > 0 && freiNachRate < 0) { ampel = 'rot'; ampelText = 'Nach Lebenshaltung und bestehenden Krediten bleibt aktuell nicht genug Spielraum für die Rate. Eine persönliche Prüfung kann Wege aufzeigen.'; }
+    else if (haushaltsnetto > 0 && freiNachRate < 200) { ampel = 'gelb'; ampelText = 'Die Rate ist tragbar, aber der monatliche Puffer ist knapp. Eine persönliche Prüfung schafft Klarheit.'; }
+    else if (eigenkapitalquote < 10) { ampel = 'gelb'; ampelText = 'Das Eigenkapital ist gering. Eine persönliche Prüfung lohnt sich.'; }
+  }
+
+  return {
+    modus, budget, benoetigtesNetto, monatlicheRate, bankdarlehen,
+    foerderbetrag, kfwGenutzt, kfwResult, gesamtdarlehen, bankzins, mischzins: mZins,
+    foerdervorteil, restschuld10, restschuld20, laufzeitJahre,
+    wert10, wert20, nettovermoegen10: wert10 - restschuld10, nettovermoegen20: wert20 - restschuld20,
+    eigenkapitalquote, finanzierungsquote, ampel, ampelText, eingaben,
+    // Haushaltsrechnung — für transparente Anzeige
+    haushalt: { pauschale, tragRate, freiNachRate, bestehendeKreditraten, erwachsene },
+  };
+}
+
+/* ============================================================================
+   FORMAT-HELPER
+   ============================================================================ */
+const fmtEUR = (n, f = 0) => {
+  if (!isFinite(n) || isNaN(n)) return '– €';
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: f, minimumFractionDigits: f }).format(n);
+};
+const fmtPct = (n, f = 1) => {
+  if (!isFinite(n) || isNaN(n)) return '– %';
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: f, minimumFractionDigits: f }).format(n) + ' %';
+};
+const fmtDate = (iso) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' });
+
+/* ============================================================================
+   UI-KOMPONENTEN
+   ============================================================================ */
+function Slider({ label, value, min, max, step, suffix, onChange, hint }) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <label className="text-sm font-medium text-ink-700">{label}</label>
+        <div className="text-right">
+          <div className="font-display text-xl font-semibold text-navy tabular-nums">
+            {new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value)}
+            <span className="text-sm font-sans font-normal text-ink-500 ml-1">{suffix}</span>
+          </div>
+          {hint && <div className="text-xs text-ink-400">{hint}</div>}
+        </div>
+      </div>
+      <div className="relative h-2 rounded-full bg-stone-200/70">
+        <div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-navy to-navy-2" style={{ width: `${pct}%` }} />
+        <input type="range" min={min} max={max} step={step} value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white border-2 border-navy shadow-md pointer-events-none" style={{ left: `${pct}%` }}>
+          <div className="absolute inset-1.5 rounded-full bg-navy" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NumberInput({ label, value, suffix, onChange, hint, placeholder }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-ink-700 flex items-baseline gap-2">
+        {label}{hint && <span className="text-xs text-ink-400 font-normal">{hint}</span>}
+      </label>
+      <div className="relative">
+        <input type="number" value={value === 0 ? '' : value} placeholder={placeholder}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="w-full px-5 py-4 pr-14 text-lg font-semibold text-navy bg-white border border-stone-300 rounded-2xl focus:border-navy focus:outline-none focus:ring-4 focus:ring-navy/10 transition-all" />
+        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-stone-400 font-medium">{suffix}</span>
+      </div>
+    </div>
+  );
+}
+
+function Toggle({ label, value, onChange, hint, disabled }) {
+  return (
+    <button type="button" onClick={() => !disabled && onChange(!value)} disabled={disabled}
+      className={`w-full flex items-center justify-between gap-4 px-5 py-4 rounded-2xl border transition-all text-left ${
+        disabled ? 'bg-stone-50 border-stone-200 opacity-50 cursor-not-allowed' :
+        value ? 'bg-navy/[0.03] border-navy/30' : 'bg-white border-stone-200 hover:border-stone-300'
+      }`}>
+      <div>
+        <div className="text-sm font-semibold text-navy">{label}</div>
+        {hint && <div className="text-xs text-ink-400 mt-0.5">{hint}</div>}
+      </div>
+      <div className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${value && !disabled ? 'bg-navy' : 'bg-stone-300'}`}>
+        <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${value && !disabled ? 'left-6' : 'left-1'}`} />
+      </div>
+    </button>
+  );
+}
+
+function Counter({ label, value, min = 0, max = 10, onChange }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-ink-700">{label}</label>
+      <div className="flex items-center bg-white border border-stone-300 rounded-2xl p-1.5 h-[60px]">
+        <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}
+          className="w-11 h-11 rounded-xl bg-stone-100 hover:bg-navy hover:text-white disabled:opacity-30 disabled:hover:bg-stone-100 text-navy font-bold text-xl transition-all flex items-center justify-center">−</button>
+        <div className="flex-1 text-center text-xl font-bold text-navy tabular-nums">{value}</div>
+        <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}
+          className="w-11 h-11 rounded-xl bg-stone-100 hover:bg-navy hover:text-white disabled:opacity-30 text-navy font-bold text-xl transition-all flex items-center justify-center">+</button>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, accent = 'default' }) {
+  const styles = {
+    default: 'bg-white border-stone-200', primary: 'bg-gradient-to-br from-navy to-navy-2 text-white border-navy',
+    accent: 'bg-gold/10 border-gold/30', success: 'bg-green-50 border-green-200',
+  };
+  const labelStyles = { default: 'text-ink-500', primary: 'text-white/60', accent: 'text-gold-dark', success: 'text-green-700' };
+  const valStyles = { default: 'text-navy', primary: 'text-white', accent: 'text-navy', success: 'text-green-800' };
+  return (
+    <div className={`relative overflow-hidden p-5 lg:p-6 rounded-2xl border ${styles[accent]}`}>
+      <div className="relative">
+        <div className={`text-xs font-semibold tracking-wider uppercase mb-2 ${labelStyles[accent]}`}>{label}</div>
+        <div className={`font-display text-2xl lg:text-3xl font-semibold tracking-tight tabular-nums ${valStyles[accent]}`}>{value}</div>
+        {sub && <div className={`text-xs mt-1 ${accent === 'primary' ? 'text-white/60' : 'text-ink-400'}`}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Section({ eyebrow, title, children, className = '' }) {
+  return (
+    <section className={`py-12 lg:py-16 ${className}`}>
+      <div className="max-w-6xl mx-auto px-5 lg:px-8">
+        <div className="mb-8 lg:mb-10">
+          {eyebrow && <div className="inline-block px-3 py-1 mb-3 text-xs font-bold tracking-widest uppercase text-gold-dark bg-gold/15 rounded-full">{eyebrow}</div>}
+          <h2 className="font-display text-3xl lg:text-4xl font-medium text-navy tracking-tight">{title}</h2>
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function AirbagModul({ rate }) {
+  const [offen, setOffen] = useState(true);
+  const [personen, setPersonen] = useState(1);
+  const eur = (n) => fmtEUR(n);
+  const EK = 10800, AU_VOL = 12000, ALO_VOL = 32400;
+  const volPerson = EK + AU_VOL + ALO_VOL;
+  const vol = volPerson * personen;
+  const pPerson = 1 - 0.8 * 0.8 * 0.94;
+  const pGes = 1 - Math.pow(1 - pPerson, personen);
+  const pPct = Math.round(pGes * 100);
+  const r = Math.max(0, rate || 0);
+  const aloPct = r > 0 ? Math.round(Math.min(900, r) / r * 100) : 0;
+  const auPct = r > 0 ? Math.round(Math.min(500, r) / r * 100) : 0;
+  const teile = [
+    { n: 'Arbeitslosigkeit', v: ALO_VOL * personen },
+    { n: 'Arbeitsunfähigkeit', v: AU_VOL * personen },
+    { n: 'Schwere Krankheit', v: EK * personen },
+  ];
+  const maxV = ALO_VOL * personen;
+
+  return (
+    <section className="px-5 lg:px-8 mt-5">
+      <div className="max-w-6xl mx-auto">
+        <div className="rounded-3xl overflow-hidden border border-navy/15 shadow-lg">
+          <button onClick={() => setOffen(o => !o)} className="w-full flex items-center gap-4 px-6 lg:px-8 py-5 bg-gradient-to-r from-navy via-navy-2 to-navy text-white text-left">
+            <div className="w-11 h-11 rounded-2xl bg-gold/25 flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
+            </div>
+            <div className="flex-1">
+              <div className="text-[10px] font-bold tracking-widest uppercase text-gold-light">Inklusive — ohne Aufpreis</div>
+              <div className="font-display text-xl lg:text-2xl font-semibold leading-tight">Ihr ScanHaus-Airbag</div>
+              <div className="text-xs text-white/60 mt-0.5">Schutz bei Krankheit, Arbeitsunfähigkeit &amp; Arbeitslosigkeit — beim Bau Ihres ScanHauses geschenkt.</div>
+            </div>
+            <svg className={`w-6 h-6 text-white/70 transition-transform flex-shrink-0 ${offen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          {offen && (
+          <div className="bg-white p-6 lg:p-8">
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+              <div className="text-xs font-bold tracking-widest uppercase text-stone-500">Abgesicherte Personen</div>
+              <div className="inline-flex bg-stone-100 rounded-xl p-1 gap-1">
+                {[1, 2].map(n => (
+                  <button key={n} onClick={() => setPersonen(n)} className={`px-5 py-2 rounded-lg text-sm font-bold transition ${personen === n ? 'bg-navy text-white shadow' : 'text-ink-500'}`}>{n === 1 ? '1 Person' : '2 Personen'}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-5">
+              <div className="lg:col-span-2 rounded-2xl bg-gradient-to-br from-navy via-navy-2 to-navy p-6 text-white">
+                <div className="text-[10px] font-bold tracking-widest uppercase text-white/50">Schutzvolumen über bis zu 10 Jahre</div>
+                <div className="font-display text-4xl lg:text-5xl font-semibold tabular-nums mt-1">bis {eur(vol)}</div>
+                <div className="text-sm text-white/60 mt-1">{personen === 1 ? 'pro abgesicherter Person' : 'für beide Personen zusammen'} · maximal mögliche Leistungen</div>
+                <div className="mt-4 space-y-2">
+                  {teile.map((t, i) => (
+                    <div key={i} className="flex items-center gap-3 text-xs">
+                      <span className="w-32 text-white/70 flex-shrink-0">{t.n}</span>
+                      <span className="flex-1 h-2 bg-white/15 rounded-full overflow-hidden"><span className="block h-full rounded-full bg-gradient-to-r from-gold-light to-gold" style={{ width: Math.round(t.v / maxV * 100) + '%' }} /></span>
+                      <span className="w-20 text-right font-display font-semibold tabular-nums">{eur(t.v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-stone-200 p-6 flex flex-col">
+                <div className="text-[10px] font-bold tracking-widest uppercase text-stone-500">Wie wahrscheinlich?</div>
+                <div className="font-display text-4xl font-semibold text-navy tabular-nums mt-1">~{pPct}%</div>
+                <div className="text-xs text-ink-500 mt-1 leading-relaxed">Wahrscheinlichkeit, dass in 10 Jahren <span className="font-semibold text-navy">mindestens ein</span> Leistungsfall eintritt{personen === 2 ? ' (bei einer der beiden Personen)' : ''}.</div>
+                <div className="mt-auto pt-3"><span className="inline-block text-[11px] font-semibold text-navy bg-gold/15 px-3 py-1 rounded-full">{personen === 1 ? 'rund jede 2,5. Einzelperson' : 'fast 2 von 3 Paaren'}</span></div>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-stone-200 p-6">
+              <div className="text-[10px] font-bold tracking-widest uppercase text-stone-500 mb-1">Ratenschutz im Ernstfall</div>
+              <div className="text-sm text-ink-600 mb-4">{r > 0 ? <>Bei Ihrer Rate von <span className="font-semibold text-navy">{eur(r)}</span> übernimmt der Airbag im Ernstfall einen großen Teil — Monat für Monat, planbar.</> : 'Berechnen Sie oben Ihre Rate, um den Ratenschutz zu sehen.'}</div>
+              <div className="grid sm:grid-cols-2 gap-5">
+                {[
+                  { n: 'Bei Arbeitslosigkeit', pct: aloPct, sub: 'bis 900 €/Mon. · bis 36 Monate' },
+                  { n: 'Bei Arbeitsunfähigkeit', pct: auPct, sub: 'bis 500 €/Mon. · bis 12 Mon./Fall' },
+                ].map((b, i) => (
+                  <div key={i}>
+                    <div className="flex justify-between text-xs font-semibold text-navy mb-1.5"><span>{b.n}</span><span className="tabular-nums">{b.pct}% der Rate</span></div>
+                    <div className="h-2.5 bg-stone-100 rounded-full overflow-hidden"><span className="block h-full rounded-full bg-gradient-to-r from-gold to-navy" style={{ width: Math.max(2, Math.min(100, b.pct)) + '%' }} /></div>
+                    <div className="text-[11px] text-ink-400 mt-1">{b.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 text-[11px] text-ink-400 leading-relaxed">
+              „Schutzvolumen" = maximal mögliche Leistungen über 10 Jahre, keine garantierte Auszahlung; Leistung nur nach Maßgabe der Versicherungsbedingungen. Wahrscheinlichkeit = konservative Modellrechnung (Quellen: DAV, RKI/ZfKD, Bundesagentur für Arbeit), kein Einzelfallnachweis. Produktgeber/Risikoträger: RheinLand Versicherungs AG (BaFin) über Partner Credit Life; ScanHaus Marlow ist kein Versicherungsvermittler.
+            </div>
+          </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AmpelBox({ state, text }) {
+  const cfg = {
+    gruen: { bg: 'bg-green-50', border: 'border-green-300', ic: 'bg-green-600', label: 'Solide Ersteinschätzung' },
+    gelb: { bg: 'bg-amber-50', border: 'border-amber-300', ic: 'bg-amber-500', label: 'Sollte geprüft werden' },
+    rot: { bg: 'bg-rose-50', border: 'border-rose-300', ic: 'bg-rose-600', label: 'Persönliche Prüfung empfohlen' },
+  };
+  const c = cfg[state];
+  return (
+    <div className={`${c.bg} ${c.border} border rounded-2xl p-5 lg:p-6 flex items-start gap-4`}>
+      <div className={`${c.ic} w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0`}>
+        <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          {state === 'gruen' && <path d="M20 6 9 17l-5-5"/>}
+          {state === 'gelb' && <g><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></g>}
+          {state === 'rot' && <g><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></g>}
+        </svg>
+      </div>
+      <div className="flex-1">
+        <div className="font-semibold text-navy mb-1">{c.label}</div>
+        <div className="text-sm text-ink-700 leading-relaxed">{text}</div>
+        <div className="text-xs text-ink-400 mt-2 italic">Unverbindliche Ersteinschätzung — ersetzt keine persönliche Finanzierungsprüfung.</div>
+      </div>
+    </div>
+  );
+}
+
+function FinanzierungsBar({ eigenkapital, bankdarlehen, foerderbetrag, gesamtbedarf }) {
+  if (gesamtbedarf <= 0) return null;
+  const teile = [
+    { name: 'Eigenkapital', betrag: eigenkapital, color: 'bg-green-500' },
+    { name: 'Bankdarlehen', betrag: bankdarlehen, color: 'bg-navy' },
+    { name: 'KfW 300', betrag: foerderbetrag, color: 'bg-gold' },
+  ].filter(t => t.betrag > 0);
+  return (
+    <div className="space-y-4">
+      <div className="flex h-14 rounded-xl overflow-hidden shadow-sm">
+        {teile.map((t, i) => (
+          <div key={i} className={`${t.color} flex items-center justify-center text-white text-xs font-semibold transition-all hover:brightness-110`}
+            style={{ width: `${(t.betrag / gesamtbedarf) * 100}%` }} title={`${t.name}: ${fmtEUR(t.betrag)}`}>
+            {(t.betrag / gesamtbedarf) > 0.08 && fmtPct((t.betrag / gesamtbedarf) * 100, 0)}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {teile.map((t, i) => (
+          <div key={i} className="flex items-center gap-2.5">
+            <div className={`w-3 h-3 rounded-sm ${t.color} flex-shrink-0`} />
+            <div className="min-w-0">
+              <div className="text-xs text-ink-500 truncate">{t.name}</div>
+              <div className="text-sm font-semibold text-navy tabular-nums">{fmtEUR(t.betrag)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VerlaufsChart({ darlehen, mischzinsP, tilgungP, kaufpreis, wertentwicklungP }) {
+  const data = useMemo(() => {
+    const points = [];
+    for (let j = 0; j <= 20; j += 2) {
+      points.push({ jahr: j, rest: restschuldNachJahren(darlehen, mischzinsP, tilgungP, j), wert: immobilienwert(kaufpreis, wertentwicklungP, j) });
+    }
+    return points;
+  }, [darlehen, mischzinsP, tilgungP, kaufpreis, wertentwicklungP]);
+  const maxVal = Math.max(...data.map(d => Math.max(d.rest, d.wert)), 1);
+  const W = 600, H = 220, P = 30;
+  const xScale = (j) => P + (j / 20) * (W - 2 * P);
+  const yScale = (v) => H - P - (v / maxVal) * (H - 2 * P);
+  const pathRest = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xScale(d.jahr)} ${yScale(d.rest)}`).join(' ');
+  const pathWert = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xScale(d.jahr)} ${yScale(d.wert)}`).join(' ');
+  const areaWert = `${pathWert} L ${xScale(20)} ${H - P} L ${xScale(0)} ${H - P} Z`;
+  return (
+    <div className="bg-stone-50 rounded-2xl p-5 lg:p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-3 mb-4">
+        <div>
+          <div className="font-display text-xl font-semibold text-navy">Vermögensaufbau über die Zeit</div>
+          <div className="text-xs text-ink-500 mt-0.5">Angenommene Wertentwicklung {fmtPct(wertentwicklungP)} p.a. — keine Prognose</div>
+        </div>
+        <div className="flex gap-4 text-xs">
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-gold" /><span className="text-ink-600">Immobilienwert</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-navy" /><span className="text-ink-600">Restschuld</span></div>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="wertGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#d7c9a7" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#d7c9a7" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0, 0.25, 0.5, 0.75, 1].map(t => (
+          <line key={t} x1={P} y1={P + t * (H - 2 * P)} x2={W - P} y2={P + t * (H - 2 * P)} stroke="#e7e5e4" strokeWidth="1" strokeDasharray="2 4" />
+        ))}
+        <path d={areaWert} fill="url(#wertGrad)" />
+        <path d={pathWert} fill="none" stroke="#c9a96e" strokeWidth="2.5" strokeLinecap="round" />
+        <path d={pathRest} fill="none" stroke="#0b1d3a" strokeWidth="2.5" strokeLinecap="round" />
+        {[0, 5, 10, 15, 20].map(j => (
+          <text key={j} x={xScale(j)} y={H - 8} textAnchor="middle" fontSize="10" fill="#78716c">{j === 0 ? 'heute' : `+${j}J`}</text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/** Haushaltsrechnung — transparente Aufstellung */
+function HaushaltsCard({ result }) {
+  const { haushalt, monatlicheRate, modus, eingaben } = result;
+  const netto = eingaben.haushaltsnetto || 0;
+  const frei = haushalt.freiNachRate;
+
+  // Farbe & Tonalität je nach Spielraum
+  const status = frei >= 500 ? 'gut' : frei >= 0 ? 'knapp' : 'kritisch';
+  const statusCfg = {
+    gut:      { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-800', label: 'Komfortabler Spielraum' },
+    knapp:    { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-800', label: 'Knapper Spielraum' },
+    kritisch: { bg: 'bg-rose-50',   border: 'border-rose-200',   text: 'text-rose-800',  label: 'Negativ — Prüfung empfohlen' },
+  }[status];
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-3xl p-6 lg:p-8">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
+        <div>
+          <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-1">Haushaltsrechnung</div>
+          <div className="font-display text-xl font-semibold text-navy">So kalkulieren auch die Banken</div>
+        </div>
+        <div className="text-xs text-ink-400">Bank-übliche Pauschalen</div>
+      </div>
+
+      <div className="space-y-2.5 text-sm">
+        <div className="flex justify-between items-center py-2 border-b border-stone-100">
+          <span className="text-ink-600">Haushaltsnettoeinkommen</span>
+          <span className="font-semibold text-green-700 tabular-nums">+ {fmtEUR(netto)}</span>
+        </div>
+        <div className="flex justify-between items-center py-2 border-b border-stone-100">
+          <span className="text-ink-600">
+            Pauschale Lebenshaltung
+            <span className="text-ink-400 text-xs ml-1.5">({haushalt.erwachsene} {haushalt.erwachsene === 1 ? 'Erwachsener' : 'Erwachsene'} + 300 € Hausunterhalt)</span>
+          </span>
+          <span className="font-semibold text-rose-700 tabular-nums">− {fmtEUR(haushalt.pauschale)}</span>
+        </div>
+        {haushalt.bestehendeKreditraten > 0 && (
+          <div className="flex justify-between items-center py-2 border-b border-stone-100">
+            <span className="text-ink-600">Bestehende Kreditraten</span>
+            <span className="font-semibold text-rose-700 tabular-nums">− {fmtEUR(haushalt.bestehendeKreditraten)}</span>
+          </div>
+        )}
+        <div className="flex justify-between items-center py-2 border-b border-stone-100">
+          <span className="text-ink-600">
+            Geplante Immobilienrate
+            <span className="text-ink-400 text-xs ml-1.5">(Zins & Tilgung)</span>
+          </span>
+          <span className="font-semibold text-rose-700 tabular-nums">− {fmtEUR(monatlicheRate)}</span>
+        </div>
+        <div className={`flex justify-between items-center py-3 px-4 rounded-xl ${statusCfg.bg} ${statusCfg.border} border mt-3`}>
+          <div>
+            <div className="text-xs font-bold tracking-widest uppercase text-ink-500 mb-0.5">Frei verfügbar pro Monat</div>
+            <div className={`text-xs ${statusCfg.text} font-semibold`}>{statusCfg.label}</div>
+          </div>
+          <div className={`font-display text-2xl lg:text-3xl font-semibold tabular-nums ${frei >= 0 ? 'text-navy' : 'text-rose-700'}`}>
+            {fmtEUR(frei)}
+          </div>
+        </div>
+      </div>
+
+      <div className="text-xs text-ink-400 italic mt-4">
+        Pauschalen entsprechen den von Banken üblicherweise angesetzten Werten: 850 € für die erste Person, +400 € je weiterer erwachsener Person, 300 € Hausunterhalt. Kinder bleiben neutral, da das Kindergeld die Mehrausgaben in etwa kompensiert.
+      </div>
+    </div>
+  );
+}
+
+/** Dedizierte KfW-300-Karte mit Status (förderfähig / nicht) */
+function KfW300Card({ result }) {
+  const { kfwResult, kfwGenutzt, foerderbetrag } = result;
+
+  if (kfwResult.foerderfaehig && foerderbetrag > 0) {
+    const ist300 = kfwGenutzt.key === 'kfw_300';
+    const programmTitel = ist300 ? 'KfW 300' : 'KfW 297/298';
+    const programmSubtitel = ist300 ? 'Wohneigentum für Familien' : 'Klimafreundlicher Neubau';
+    const programmLabel = ist300 ? 'Förderdarlehen — KfW 300' : 'Förderdarlehen — KfW 297/298';
+
+    return (
+      <div className="bg-gradient-to-br from-gold/10 to-gold/5 border border-gold/30 rounded-3xl p-6 lg:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div>
+            <div className="text-xs font-bold tracking-widest uppercase text-gold-dark mb-1">{programmLabel}</div>
+            <div className="font-display text-2xl font-semibold text-navy">{programmSubtitel}</div>
+            <div className="text-sm text-ink-500 mt-1">
+              Klimafreundliches Wohngebäude{kfwGenutzt.qng ? ' mit QNG-Siegel' : ''}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-display text-3xl lg:text-4xl font-semibold text-navy tabular-nums">{fmtEUR(foerderbetrag)}</div>
+            <div className="text-sm text-ink-500">zu {fmtPct(kfwGenutzt.zins, 2)} Sollzins</div>
+          </div>
+        </div>
+
+        {/* Bei KfW 297: Hinweis warum nicht 300 */}
+        {!ist300 && kfwResult.grund300 && (
+          <div className="mb-4 p-3 bg-white/60 border border-stone-200 rounded-xl text-xs text-ink-600">
+            <strong className="text-navy">Hinweis:</strong> KfW 300 (höhere Förderbeträge bis 240 T€) ist hier nicht möglich — {kfwResult.grund300.toLowerCase()}.
+            Stattdessen greift die Alternative KfW 297/298, die keine Einkommensgrenze und keine Beschränkung bei bestehendem Wohneigentum kennt.
+          </div>
+        )}
+
+        <div className="grid sm:grid-cols-3 gap-3 pt-4 border-t border-gold/20">
+          <div>
+            <div className="text-xs text-ink-500 mb-0.5">Max. Förderbetrag</div>
+            <div className="font-semibold text-navy tabular-nums">{fmtEUR(kfwGenutzt.maxBetrag)}</div>
+          </div>
+          {ist300 && kfwResult.einkommensgrenze && (
+            <div>
+              <div className="text-xs text-ink-500 mb-0.5">Einkommensgrenze</div>
+              <div className="font-semibold text-navy tabular-nums">{fmtEUR(kfwResult.einkommensgrenze)}</div>
+            </div>
+          )}
+          {!ist300 && (
+            <div>
+              <div className="text-xs text-ink-500 mb-0.5">Einkommensgrenze</div>
+              <div className="font-semibold text-navy">keine</div>
+            </div>
+          )}
+          <div>
+            <div className="text-xs text-ink-500 mb-0.5">Fördervorteil</div>
+            <div className="font-semibold text-green-700 tabular-nums">{fmtEUR(result.foerdervorteil)}</div>
+          </div>
+        </div>
+        <div className="text-xs text-ink-400 italic mt-4">
+          Förderbetrag gemäß offizieller KfW-Konditionen — verbindliche Zusage erfolgt durch die KfW, vorbehaltlich finaler Prüfung.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-stone-50 border border-stone-200 rounded-3xl p-6 lg:p-8">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-xl bg-stone-200 flex items-center justify-center flex-shrink-0">
+          <svg className="w-6 h-6 text-stone-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div className="flex-1">
+          <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-1">KfW-Förderung</div>
+          <div className="font-display text-xl font-semibold text-navy mb-1">Aktuell keine KfW-Förderung möglich</div>
+          <div className="text-sm text-ink-600">{kfwResult.grund}</div>
+          <div className="text-xs text-ink-400 italic mt-3">
+            Die KfW-Förderung erfordert mindestens einen klimafreundlichen Neubau (Effizienzhaus 40 oder 55). Trotzdem prüfen wir gerne, welche anderen Bausteine in Frage kommen.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   PDF-VORSCHLAG: MODAL + DRUCKANSICHT
+   ============================================================================ */
+
+/** Modal zur Erfassung von Käufer- und Objektdaten vor PDF-Erstellung */
+function PdfModalEingabe({ offen, onClose, daten, setDaten, onErstellen }) {
+  if (!offen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/40 backdrop-blur-sm no-print" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 lg:p-8">
+          <div className="flex items-start justify-between gap-3 mb-6">
+            <div>
+              <div className="text-xs font-bold tracking-widest uppercase text-gold-dark mb-1">Finanzierungsvorschlag erstellen</div>
+              <div className="font-display text-2xl font-semibold text-navy leading-tight">Angaben zum Bauherrn und Bauvorhaben</div>
+              <div className="text-sm text-ink-500 mt-1">Diese Daten erscheinen auf dem persönlichen Vorschlag.</div>
+            </div>
+            <button onClick={onClose} className="w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 flex items-center justify-center transition-colors flex-shrink-0">
+              <svg className="w-4 h-4 text-ink-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-1.5 block">Name des Bauherrn</label>
+              <input type="text" value={daten.kaeufer} onChange={(e) => setDaten({ ...daten, kaeufer: e.target.value })}
+                placeholder="z.B. Familie Mustermann"
+                className="w-full px-4 py-3 text-base text-navy bg-white border border-stone-300 rounded-xl focus:border-navy focus:outline-none focus:ring-4 focus:ring-navy/10" />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-1.5 block">Bauvorhaben / Standort</label>
+              <input type="text" value={daten.objektAdresse} onChange={(e) => setDaten({ ...daten, objektAdresse: e.target.value })}
+                placeholder="z.B. Einfamilienhaus, Musterstraße 12, 04155 Leipzig"
+                className="w-full px-4 py-3 text-base text-navy bg-white border border-stone-300 rounded-xl focus:border-navy focus:outline-none focus:ring-4 focus:ring-navy/10" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-1.5 block">Haustyp / Modell</label>
+                <input type="text" value={daten.baujahr} onChange={(e) => setDaten({ ...daten, baujahr: e.target.value })}
+                  placeholder="z.B. Stadthaus 142"
+                  className="w-full px-4 py-3 text-base text-navy bg-white border border-stone-300 rounded-xl focus:border-navy focus:outline-none focus:ring-4 focus:ring-navy/10" />
+              </div>
+              <div>
+                <label className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-1.5 block">Wohnfläche</label>
+                <input type="text" value={daten.wohnflaeche} onChange={(e) => setDaten({ ...daten, wohnflaeche: e.target.value })}
+                  placeholder="z.B. 142 m²"
+                  className="w-full px-4 py-3 text-base text-navy bg-white border border-stone-300 rounded-xl focus:border-navy focus:outline-none focus:ring-4 focus:ring-navy/10" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-1.5 block">Notizen (optional)</label>
+              <textarea value={daten.notizen} onChange={(e) => setDaten({ ...daten, notizen: e.target.value })}
+                placeholder="Persönliche Anmerkung, Besonderheiten zum Bauvorhaben …"
+                rows="3"
+                className="w-full px-4 py-3 text-base text-navy bg-white border border-stone-300 rounded-xl focus:border-navy focus:outline-none focus:ring-4 focus:ring-navy/10 resize-none" />
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6 pt-6 border-t border-stone-200">
+            <button onClick={onClose} className="flex-1 px-6 py-3 text-sm font-semibold text-ink-600 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors">
+              Abbrechen
+            </button>
+            <button onClick={onErstellen} className="flex-1 px-6 py-3 text-sm font-semibold text-white bg-navy hover:bg-navy-2 rounded-xl transition-colors shadow-md">
+              Vorschlag erstellen →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Druckansicht für den Finanzierungsvorschlag (Hausverkäufer-Variante).
+ * Layout: 2 Seiten (Vorder- und Rückseite).
+ */
+function PdfPrintView({ result, eingaben, kundenDaten, vermittler, konditionen, datum }) {
+  const heute = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: 'long', year: 'numeric' });
+  const r = result;
+  const e = eingaben;
+  const k = kundenDaten;
+  const haushalt = r.haushalt;
+  const kfwGenutzt = r.kfwGenutzt;
+  const istKfwAktiv = r.foerderbetrag > 0;
+  const ist300 = kfwGenutzt && kfwGenutzt.key === 'kfw_300';
+
+  const sectionTitleStyle = { fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#b08947', marginBottom: '8px', borderBottom: '1px solid #e5d9c4', paddingBottom: '4px' };
+  const tableTextStyle = { width: '100%', borderCollapse: 'collapse', fontSize: '10pt' };
+  const labelStyle = { padding: '5px 0', color: '#444' };
+  const valueStyle = { textAlign: 'right', fontWeight: 600, color: '#0b1d3a', fontVariantNumeric: 'tabular-nums' };
+
+  return (
+    <div className="print-only" style={{ background: '#ffffff', fontFamily: '"Inter Tight", sans-serif', color: '#1a1a1a' }}>
+
+      {/* ==================== SEITE 1 ==================== */}
+      <div className="print-page" style={{ maxWidth: '180mm', margin: '0 auto', padding: '0', fontSize: '10pt', lineHeight: '1.5' }}>
+
+        {/* KOPF */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0b1d3a', paddingBottom: '12px', marginBottom: '18px' }}>
+          <div>
+            <div style={{ fontFamily: '"Fraunces", serif', fontSize: '18pt', fontWeight: 600, color: '#0b1d3a', letterSpacing: '-0.01em', lineHeight: '1.1' }}>
+              CEB · <span style={{ fontWeight: 700 }}>Bankshop</span> · AG
+            </div>
+            <div style={{ fontSize: '8pt', color: '#666', marginTop: '2px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Vermittlung von Bankdienstleistungen
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#b08947' }}>
+              Persönlicher Finanzierungsvorschlag
+            </div>
+            <div style={{ fontSize: '9pt', color: '#666', marginTop: '2px' }}>Erstellt am {heute}</div>
+            <div style={{ fontSize: '8pt', color: '#999', marginTop: '1px' }}>Seite 1 von 2</div>
+          </div>
+        </div>
+
+        {/* HERO */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, #0b1d3a 0%, #142b54 100%)', borderRadius: '12px', padding: '20px 24px', marginBottom: '20px', color: '#fff' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: '"Fraunces", serif', fontSize: '20pt', fontWeight: 500, lineHeight: '1.15', marginBottom: '4px' }}>
+              Ihr Weg ins Eigenheim.
+            </div>
+            <div style={{ fontSize: '9pt', color: 'rgba(255,255,255,0.75)' }}>
+              Maßgeschneiderte Finanzierung für Ihren Hausbau
+            </div>
+          </div>
+          <svg width="90" height="80" viewBox="0 0 100 90" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+            <path d="M20 45 L50 22 L80 45 L80 78 L20 78 Z" fill="none" stroke="#d4a657" strokeWidth="2" strokeLinejoin="round"/>
+            <path d="M15 47 L50 19 L85 47" fill="none" stroke="#d4a657" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <rect x="65" y="28" width="6" height="13" fill="none" stroke="#d4a657" strokeWidth="2"/>
+            <rect x="42" y="58" width="14" height="20" fill="none" stroke="#d4a657" strokeWidth="2"/>
+            <circle cx="52" cy="68" r="0.8" fill="#d4a657"/>
+            <rect x="28" y="52" width="10" height="10" fill="none" stroke="#d4a657" strokeWidth="1.5"/>
+            <line x1="33" y1="52" x2="33" y2="62" stroke="#d4a657" strokeWidth="1"/>
+            <line x1="28" y1="57" x2="38" y2="57" stroke="#d4a657" strokeWidth="1"/>
+            <rect x="62" y="52" width="10" height="10" fill="none" stroke="#d4a657" strokeWidth="1.5"/>
+            <line x1="67" y1="52" x2="67" y2="62" stroke="#d4a657" strokeWidth="1"/>
+            <line x1="62" y1="57" x2="72" y2="57" stroke="#d4a657" strokeWidth="1"/>
+          </svg>
+        </div>
+
+        {/* KUNDEN- UND OBJEKT-DATEN */}
+        <div className="print-avoid-break" style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#666', marginBottom: '8px' }}>Erstellt für</div>
+          <table style={tableTextStyle}>
+            <tbody>
+              {k.kaeufer && <tr><td style={{ width: '32%', padding: '3px 0', color: '#666' }}>Bauherr:</td><td style={{ fontWeight: 600, color: '#0b1d3a' }}>{k.kaeufer}</td></tr>}
+              {k.objektAdresse && <tr><td style={{ padding: '3px 0', color: '#666' }}>Bauvorhaben:</td><td style={{ fontWeight: 600, color: '#0b1d3a' }}>{k.objektAdresse}</td></tr>}
+              {(k.baujahr || k.wohnflaeche) && (
+                <tr><td style={{ padding: '3px 0', color: '#666' }}>Eckdaten:</td><td style={{ color: '#0b1d3a' }}>
+                  {k.baujahr || ''}{k.baujahr && k.wohnflaeche ? ' · ' : ''}{k.wohnflaeche || ''}
+                </td></tr>
+              )}
+              <tr><td style={{ padding: '3px 0', color: '#666' }}>Nutzung:</td><td style={{ fontWeight: 600, color: '#0b1d3a' }}>Eigennutzung (Hausbau)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* ECKDATEN */}
+        <div className="print-avoid-break" style={{ marginBottom: '16px' }}>
+          <div style={sectionTitleStyle}>Eckdaten der Finanzierung</div>
+          <table style={tableTextStyle}>
+            <tbody>
+              <tr style={{ borderBottom: '1px dotted #ddd' }}><td style={labelStyle}>Kaufpreis / Hauspreis</td><td style={valueStyle}>{fmtEUR(r.budget || e.hauspreis || 0)}</td></tr>
+              <tr style={{ borderBottom: '1px dotted #ddd' }}><td style={labelStyle}>Kaufnebenkosten ({(e.nebenkostenQ || 0).toFixed(1).replace('.', ',')} %)</td><td style={valueStyle}>{fmtEUR((r.budget || e.hauspreis || 0) * (e.nebenkostenQ || 0) / 100)}</td></tr>
+              <tr style={{ borderBottom: '1px dotted #ddd' }}><td style={labelStyle}>Eingesetztes Eigenkapital</td><td style={valueStyle}>{fmtEUR(e.eigenkapital || 0)}</td></tr>
+              <tr style={{ background: '#0b1d3a', color: '#fff' }}>
+                <td style={{ padding: '8px 8px', fontWeight: 600 }}>Finanzierungsbedarf gesamt</td>
+                <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: 700, fontSize: '12pt', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(r.gesamtdarlehen || 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* FINANZIERUNG */}
+        <div className="print-avoid-break" style={{ marginBottom: '16px' }}>
+          <div style={sectionTitleStyle}>Ihre Finanzierung im Überblick</div>
+          <table style={tableTextStyle}>
+            <tbody>
+              <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                <td style={labelStyle}>Bank-Annuitätendarlehen</td>
+                <td style={valueStyle}>{fmtEUR(r.bankdarlehen || 0)}</td>
+              </tr>
+              <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                <td style={labelStyle}>Bankzins (Beispiel-Kondition)</td>
+                <td style={valueStyle}>{fmtPct(r.bankzins || 0, 2)} p.a.</td>
+              </tr>
+              {istKfwAktiv && (
+                <>
+                  <tr style={{ borderBottom: '1px dotted #ddd', background: '#fdf9f0' }}>
+                    <td style={labelStyle}>
+                      <strong style={{ color: '#b08947' }}>{ist300 ? 'KfW 300 – Wohneigentum für Familien' : 'KfW 297/298 – Klimafreundlicher Neubau'}</strong>
+                    </td>
+                    <td style={valueStyle}>{fmtEUR(r.foerderbetrag || 0)}</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                    <td style={labelStyle}>KfW-Sollzins</td>
+                    <td style={valueStyle}>{fmtPct(kfwGenutzt.zins || 0, 2)} p.a.</td>
+                  </tr>
+                  <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                    <td style={labelStyle}>Mischzins (effektiver Gesamtzins)</td>
+                    <td style={valueStyle}>{fmtPct(r.mischzins || 0, 2)} p.a.</td>
+                  </tr>
+                </>
+              )}
+              <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                <td style={labelStyle}>Zinsbindung</td>
+                <td style={{ ...valueStyle, fontVariantNumeric: 'normal' }}>{e.zinsbindung || 10} Jahre</td>
+              </tr>
+              <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                <td style={labelStyle}>Tilgung</td>
+                <td style={valueStyle}>{fmtPct(e.tilgung || 0, 2)} p.a.</td>
+              </tr>
+              <tr style={{ background: '#fdf9f0', borderTop: '2px solid #d4a657' }}>
+                <td style={{ padding: '10px 8px', fontWeight: 600, color: '#0b1d3a' }}>Voraussichtliche monatliche Rate</td>
+                <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 700, fontSize: '13pt', color: '#0b1d3a', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(r.monatlicheRate || 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* HAUSHALTSRECHNUNG */}
+        {haushalt && (
+          <div className="print-avoid-break" style={{ marginBottom: '16px' }}>
+            <div style={sectionTitleStyle}>Tragfähigkeit nach Bank-Standard</div>
+            <table style={tableTextStyle}>
+              <tbody>
+                <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                  <td style={labelStyle}>Haushaltsnetto monatlich</td>
+                  <td style={{ ...valueStyle, color: '#15803d' }}>+ {fmtEUR(e.haushaltsnetto || 0)}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                  <td style={labelStyle}>Lebenshaltungspauschale ({haushalt.erwachsene || 1} Erw. · inkl. Hausunterhalt)</td>
+                  <td style={{ ...valueStyle, color: '#b91c1c' }}>− {fmtEUR(haushalt.pauschale || 0)}</td>
+                </tr>
+                {(haushalt.bestehendeKreditraten || 0) > 0 && (
+                  <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                    <td style={labelStyle}>Bestehende Kreditraten</td>
+                    <td style={{ ...valueStyle, color: '#b91c1c' }}>− {fmtEUR(haushalt.bestehendeKreditraten)}</td>
+                  </tr>
+                )}
+                <tr style={{ borderBottom: '1px dotted #ddd' }}>
+                  <td style={labelStyle}><strong>Verfügbar für die Finanzierungsrate</strong></td>
+                  <td style={{ ...valueStyle, fontWeight: 700 }}>{fmtEUR(haushalt.tragRate || 0)}</td>
+                </tr>
+                <tr style={{ background: '#fef3f3' }}>
+                  <td style={labelStyle}>Erforderliche Rate für diese Finanzierung</td>
+                  <td style={{ ...valueStyle, color: '#b91c1c' }}>− {fmtEUR(r.monatlicheRate || 0)}</td>
+                </tr>
+                <tr style={{ background: (haushalt.freiNachRate || 0) >= 0 ? '#f0f9f4' : '#fef3f3', borderTop: '2px solid #b08947' }}>
+                  <td style={{ padding: '10px 8px', fontWeight: 600, color: '#0b1d3a' }}>
+                    {(haushalt.freiNachRate || 0) >= 0 ? 'Frei verfügbarer Puffer' : 'Fehlender Betrag'}
+                  </td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 700, fontSize: '13pt', color: (haushalt.freiNachRate || 0) >= 0 ? '#15803d' : '#b91c1c', fontVariantNumeric: 'tabular-nums' }}>
+                    {(haushalt.freiNachRate || 0) >= 0 ? '+ ' : '− '}{fmtEUR(Math.abs(haushalt.freiNachRate || 0))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{ fontSize: '8pt', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
+              Banken-Standardpauschalen: 850 € (1. Erwachsener), 400 € (2. Erwachsener), 400 € pro weiterer Erwachsener, 300 € Hausunterhalt. Kinder werden über das Kindergeld kompensiert.
+            </div>
+          </div>
+        )}
+
+        {/* ANSPRECHPARTNER */}
+        <div className="print-avoid-break" style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          {vermittler && vermittler.hv && (
+            <div style={{ background: '#0b1d3a', color: '#fff', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#d4a657', marginBottom: '6px' }}>Ihr Ansprechpartner zum Hausbau</div>
+              <div style={{ fontFamily: '"Fraunces", serif', fontSize: '14pt', fontWeight: 600, lineHeight: '1.2', marginBottom: '2px' }}>{vermittler.hv}</div>
+              {vermittler.hf && <div style={{ fontSize: '9pt', color: 'rgba(255,255,255,0.75)', marginBottom: '6px' }}>{vermittler.hf}</div>}
+              {vermittler.t && <div style={{ fontSize: '9pt', color: 'rgba(255,255,255,0.9)' }}>📞 {vermittler.t}</div>}
+              {vermittler.email && <div style={{ fontSize: '9pt', color: 'rgba(255,255,255,0.9)' }}>✉ {vermittler.email}</div>}
+            </div>
+          )}
+          {vermittler && vermittler.fn && (
+            <div style={{ background: 'linear-gradient(135deg, #d4a657 0%, #b08947 100%)', color: '#fff', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#fff', marginBottom: '6px', opacity: 0.9 }}>Ihr persönlicher Finanzierungspartner</div>
+              <div style={{ fontFamily: '"Fraunces", serif', fontSize: '14pt', fontWeight: 600, lineHeight: '1.2', marginBottom: '2px' }}>{vermittler.fn}</div>
+              <div style={{ fontSize: '9pt', color: 'rgba(255,255,255,0.85)', marginBottom: '6px' }}>CEB Bankshop AG</div>
+              {vermittler.ft && <div style={{ fontSize: '9pt', color: '#fff' }}>📞 {vermittler.ft}</div>}
+            </div>
+          )}
+          {(!vermittler || !vermittler.hv) && (!vermittler || !vermittler.fn) && (
+            <div style={{ gridColumn: 'span 2', background: 'linear-gradient(135deg, #d4a657 0%, #b08947 100%)', color: '#fff', borderRadius: '12px', padding: '14px 16px' }}>
+              <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#fff', marginBottom: '6px', opacity: 0.9 }}>Ihr Finanzierungspartner</div>
+              <div style={{ fontFamily: '"Fraunces", serif', fontSize: '14pt', fontWeight: 600, lineHeight: '1.2' }}>CEB Bankshop AG</div>
+              <div style={{ fontSize: '9pt', color: 'rgba(255,255,255,0.9)', marginTop: '4px' }}>Tel 0341 / 590 84-0 · info@bankshop.de</div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: '14px', textAlign: 'center', fontSize: '8pt', color: '#999', fontStyle: 'italic' }}>
+          ↪ Weitere Details zu Vermögensentwicklung{istKfwAktiv ? ' und KfW-Förderung' : ''} auf der Rückseite (Seite 2)
+        </div>
+
+      </div>
+
+      {/* ==================== SEITE 2 ==================== */}
+      <div className="print-page" style={{ maxWidth: '180mm', margin: '0 auto', padding: '0', fontSize: '10pt', lineHeight: '1.5' }}>
+
+        {/* Mini-Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #ddd', paddingBottom: '8px', marginBottom: '14px' }}>
+          <div>
+            <div style={{ fontFamily: '"Fraunces", serif', fontSize: '14pt', fontWeight: 600, color: '#0b1d3a', letterSpacing: '-0.01em', lineHeight: '1.1' }}>
+              CEB · <span style={{ fontWeight: 700 }}>Bankshop</span> · AG
+            </div>
+            <div style={{ fontSize: '7pt', color: '#888', marginTop: '1px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Persönlicher Finanzierungsvorschlag
+            </div>
+          </div>
+          <div style={{ textAlign: 'right', fontSize: '8pt', color: '#999' }}>Seite 2 von 2</div>
+        </div>
+
+        {/* VERMÖGENSENTWICKLUNG */}
+        <div className="print-avoid-break" style={{ marginBottom: '18px' }}>
+          <div style={sectionTitleStyle}>Vermögensentwicklung nach 10 und 20 Jahren</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '8px' }}>
+            <div style={{ background: '#fafafa', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '12px 14px' }}>
+              <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#666', marginBottom: '8px' }}>In 10 Jahren</div>
+              <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'space-between', fontSize: '10pt' }}>
+                <span style={{ color: '#666' }}>Immobilienwert</span>
+                <span style={{ fontWeight: 600, color: '#0b1d3a', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(r.wert10 || 0)}</span>
+              </div>
+              <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'space-between', fontSize: '10pt' }}>
+                <span style={{ color: '#666' }}>Restschuld</span>
+                <span style={{ fontWeight: 600, color: '#b91c1c', fontVariantNumeric: 'tabular-nums' }}>− {fmtEUR(r.restschuld10 || 0)}</span>
+              </div>
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: '9pt', fontWeight: 600, color: '#0b1d3a' }}>Nettovermögen</span>
+                <span style={{ fontFamily: '"Fraunces", serif', fontSize: '15pt', fontWeight: 600, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(r.nettovermoegen10 || 0)}</span>
+              </div>
+            </div>
+            <div style={{ background: '#fafafa', border: '1px solid #e5e5e5', borderRadius: '12px', padding: '12px 14px' }}>
+              <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#666', marginBottom: '8px' }}>In 20 Jahren</div>
+              <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'space-between', fontSize: '10pt' }}>
+                <span style={{ color: '#666' }}>Immobilienwert</span>
+                <span style={{ fontWeight: 600, color: '#0b1d3a', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(r.wert20 || 0)}</span>
+              </div>
+              <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'space-between', fontSize: '10pt' }}>
+                <span style={{ color: '#666' }}>Restschuld</span>
+                <span style={{ fontWeight: 600, color: '#b91c1c', fontVariantNumeric: 'tabular-nums' }}>− {fmtEUR(r.restschuld20 || 0)}</span>
+              </div>
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: '9pt', fontWeight: 600, color: '#0b1d3a' }}>Nettovermögen</span>
+                <span style={{ fontFamily: '"Fraunces", serif', fontSize: '15pt', fontWeight: 600, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(r.nettovermoegen20 || 0)}</span>
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: '8pt', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
+            Modellrechnung mit angenommener Wertentwicklung von {fmtPct(e.wertentwicklungP || 2, 1)} p.a. — keine Garantie für tatsächliche Marktentwicklung.
+          </div>
+        </div>
+
+        {/* KFW-DETAIL */}
+        {istKfwAktiv && (
+          <div className="print-avoid-break" style={{ marginBottom: '18px' }}>
+            <div style={sectionTitleStyle}>
+              KfW-Förderung im Detail
+            </div>
+            <div style={{ background: 'linear-gradient(135deg, #fdf9f0 0%, #f7efd9 100%)', border: '1px solid #d4a657', borderRadius: '12px', padding: '16px 18px', marginTop: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div>
+                  <div style={{ fontSize: '8pt', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#b08947' }}>
+                    {ist300 ? 'KfW 300' : 'KfW 297/298'}
+                  </div>
+                  <div style={{ fontFamily: '"Fraunces", serif', fontSize: '14pt', fontWeight: 600, color: '#0b1d3a' }}>
+                    {ist300 ? 'Wohneigentum für Familien' : 'Klimafreundlicher Neubau'}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontFamily: '"Fraunces", serif', fontSize: '17pt', fontWeight: 700, color: '#0b1d3a', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtEUR(r.foerderbetrag)}
+                  </div>
+                  <div style={{ fontSize: '9pt', color: '#666' }}>
+                    zu {fmtPct(kfwGenutzt.zins, 2)} Sollzins
+                  </div>
+                </div>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginTop: '8px', borderTop: '1px solid rgba(212,166,87,0.3)', paddingTop: '8px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '4px 0', color: '#666' }}>Max. Förderbetrag (Ihr Fall)</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#0b1d3a', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(kfwGenutzt.maxBetrag)}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '4px 0', color: '#666' }}>Fördervorteil über Laufzeit</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>+ {fmtEUR(r.foerdervorteil || 0)}</td>
+                  </tr>
+                  {ist300 && r.kfwResult && r.kfwResult.einkommensgrenze && (
+                    <tr>
+                      <td style={{ padding: '4px 0', color: '#666' }}>Einkommensgrenze (max. zvE)</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#0b1d3a', fontVariantNumeric: 'tabular-nums' }}>{fmtEUR(r.kfwResult.einkommensgrenze)}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td style={{ padding: '4px 0', color: '#666' }}>Bedingung</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: '#0b1d3a', fontSize: '8pt' }}>
+                      {ist300 ? 'Familie mit Kind · klimafreundlicher Neubau' : 'EH 40 oder EH 55 · auch ohne Familie'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div style={{ fontSize: '8pt', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
+              Förderbetrag gemäß offizieller KfW-Konditionen — verbindliche Zusage erfolgt durch die KfW, vorbehaltlich finaler Prüfung.
+            </div>
+          </div>
+        )}
+
+        {/* NOTIZEN */}
+        {k.notizen && (
+          <div className="print-avoid-break" style={{ marginBottom: '14px', padding: '10px 14px', background: '#faf6ed', border: '1px solid #e5d9c4', borderRadius: '8px' }}>
+            <div style={{ fontSize: '7pt', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#b08947', marginBottom: '4px' }}>Persönliche Anmerkung</div>
+            <div style={{ fontSize: '10pt', color: '#333', whiteSpace: 'pre-wrap' }}>{k.notizen}</div>
+          </div>
+        )}
+
+        {/* RECHTLICHER HINWEIS */}
+        <div style={{ marginTop: '14px', padding: '10px 14px', background: '#f6f6f6', borderRadius: '6px', fontSize: '8pt', color: '#555', lineHeight: '1.5' }}>
+          <strong style={{ color: '#0b1d3a' }}>Rechtlicher Hinweis:</strong> Diese Berechnung dient ausschließlich der ersten Orientierung und stellt
+          kein Angebot im Sinne des § 145 BGB dar. Sie ist unverbindlich. Die finale Konditionsbestätigung
+          erfolgt nach individueller Bonitätsprüfung. Eine konkrete Förderzusage für KfW-Programme erfolgt ausschließlich durch die KfW.
+          Stand der Konditionen: {konditionen.stand || datum}.
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #ddd', fontSize: '7.5pt', color: '#777', lineHeight: '1.5' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 2fr', gap: '10px' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: '#0b1d3a', marginBottom: '2px' }}>CEB Bankshop AG</div>
+              Stallbaumstraße 11<br/>04155 Leipzig<br/>Tel: 0341 / 590 84-0<br/>info@bankshop.de
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, color: '#0b1d3a', marginBottom: '2px' }}>Vorstand &amp; Aufsicht</div>
+              Vorstand: Sven Thom, Nils Thom<br/>Aufsichtsrat: RA Dr. Michael Schulte<br/>HRB 22885 AG Leipzig<br/>Steuer-Nr. 232/100/00623
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, color: '#0b1d3a', marginBottom: '2px' }}>§ 34i GewO</div>
+              Reg.-Nr.: D-W-159-Q68C-94<br/>Aufsicht: IHK Leipzig<br/>Schlichtungsstelle: BaFin – Referat Q21,<br/>Graurheindorfer Str. 108, 53117 Bonn
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* ============================================================================
+   HAUPTKOMPONENTE
+   ============================================================================ */
+function FinanzierungsNavigator() {
+  // Vermittler-Daten + Zinsen: erst URL-Parameter prüfen, dann Config-Fallback
+  const vermittler = useMemo(() => {
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const fromUrl = (key) => {
+      const v = params.get(key);
+      return v && v.trim() ? v.trim() : null;
+    };
+    return {
+      hausbaufirma:       fromUrl('hf') || konditionen.vermittler.hausbaufirma,
+      hausverkaeufer:     fromUrl('hv') || konditionen.vermittler.hausverkaeufer,
+      hausverkaeuferTelefon: fromUrl('hvt') || null,
+      hausverkaeuferEmail:   fromUrl('hve') || null,
+      finanziererName:    fromUrl('fn') || konditionen.vermittler.finanziererName,
+      finanziererTelefon: fromUrl('ft') || konditionen.vermittler.finanziererTelefon,
+      cta_url:            fromUrl('u')  || konditionen.vermittler.cta_url,
+    };
+  }, []);
+
+  // Aktive Konditionen: wenn Zins-Parameter in URL → diese nutzen, sonst Standard
+  // Konditionen werden aus zinsen.json (zentrale Datei) geladen
+  // Optional: Sonder-Konditionen aus URL überschreiben für einzelnen Link
+  const [geladeneKonditionen, setGeladeneKonditionen] = useState(null);
+
+  useEffect(() => {
+    // zinsen.json laden (liegt im selben Ordner wie diese HTML)
+    fetch('zinsen.json?t=' + Date.now())
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.bankzinsen) {
+          setGeladeneKonditionen(data);
+        }
+      })
+      .catch(() => {
+        // Falls zinsen.json fehlt: Standard aus konditionen wird genutzt
+      });
+  }, []);
+
+  const aktiveKonditionen = useMemo(() => {
+    // 1) Basis: hartkodierte Defaults aus konditionen
+    let aktiv = { ...konditionen };
+
+    // 2) Falls zinsen.json geladen: deren Werte verwenden
+    if (geladeneKonditionen && geladeneKonditionen.bankzinsen) {
+      aktiv = {
+        ...aktiv,
+        stand: geladeneKonditionen.stand || aktiv.stand,
+        bankzinsen: { ...aktiv.bankzinsen, ...geladeneKonditionen.bankzinsen },
+      };
+    }
+    // KfW-Zinsen aus zinsen.json übernehmen (falls vorhanden)
+    if (geladeneKonditionen && geladeneKonditionen.kfw) {
+      if (geladeneKonditionen.kfw.kfw300 != null) {
+        aktiv = { ...aktiv, kfw300: { ...aktiv.kfw300, zins: geladeneKonditionen.kfw.kfw300 } };
+      }
+      if (geladeneKonditionen.kfw.kfw297 != null) {
+        aktiv = { ...aktiv, kfw297: { ...aktiv.kfw297, zins: geladeneKonditionen.kfw.kfw297 } };
+      }
+    }
+
+    // 3) Sonder-Konditionen aus URL prüfen (z.B. für Sonderaktionen)
+    if (typeof window === 'undefined') return aktiv;
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = (key) => {
+      const v = parseFloat(params.get(key));
+      return isFinite(v) && v > 0 ? v : null;
+    };
+    const z5 = fromUrl('z5'), z10 = fromUrl('z10'), z15 = fromUrl('z15');
+    const z20 = fromUrl('z20'), z30 = fromUrl('z30');
+    const zd = params.get('zd');
+
+    if (z5 == null && z10 == null && z15 == null && z20 == null && z30 == null && !zd) {
+      return aktiv;
+    }
+    return {
+      ...aktiv,
+      stand: zd || aktiv.stand,
+      bankzinsen: {
+        5:  z5  != null ? z5  : aktiv.bankzinsen[5],
+        10: z10 != null ? z10 : aktiv.bankzinsen[10],
+        15: z15 != null ? z15 : aktiv.bankzinsen[15],
+        20: z20 != null ? z20 : aktiv.bankzinsen[20],
+        30: z30 != null ? z30 : aktiv.bankzinsen[30],
+      },
+      // Markierung dass das Sonder-Konditionen sind
+      sonderkonditionen: true,
+    };
+  }, [geladeneKonditionen]);
+
+  const [modus, setModus] = useState('budget');
+  const [haushaltsnetto, setHaushaltsnetto] = useState(4500);
+  const [zuVersteuerndesEinkommen, setZuVersteuerndesEinkommen] = useState(80000);
+  const [eigenkapital, setEigenkapital] = useState(80000);
+  const [maxRate, setMaxRate] = useState(1400);
+  const [hauspreis, setHauspreis] = useState(450000);
+  const [erwachsene, setErwachsene] = useState(2);
+  const [bestehendeKreditraten, setBestehendeKreditraten] = useState(0);
+  const [nebenkostenQ, setNebenkostenQ] = useState(konditionen.defaults.nebenkostenquote);
+  const [tilgung, setTilgung] = useState(konditionen.defaults.tilgung);
+  const [zinsbindung, setZinsbindung] = useState(konditionen.defaults.zinsbindung);
+  const [wertentwicklung, setWertentwicklung] = useState(konditionen.defaults.wertentwicklung);
+  const [foerdermittelAktiv, setFoerdermittelAktiv] = useState(true);
+  const [kinder, setKinder] = useState(2);
+  const [klimaNeubau, setKlimaNeubau] = useState(true);
+  const [qng, setQng] = useState(false);
+  const [bestehendesWohneigentum, setBestehendesWohneigentum] = useState(false);
+
+  // ===== PDF-Vorschlag-Modal =====
+  const [pdfModalOffen, setPdfModalOffen] = useState(false);
+  const [pdfKaeufer, setPdfKaeufer] = useState('');
+  const [pdfObjektAdresse, setPdfObjektAdresse] = useState('');
+  const [pdfBaujahr, setPdfBaujahr] = useState('');
+  const [pdfWohnflaeche, setPdfWohnflaeche] = useState('');
+  const [pdfNotizen, setPdfNotizen] = useState('');
+  const [bankzinsManuell, setBankzinsManuell] = useState(false);
+  const [bankzinsOverride, setBankzinsOverride] = useState(konditionen.bankzinsen[10]);
+  // KfW-Zins manuell überschreiben
+  const [kfwZinsManuell, setKfwZinsManuell] = useState(false);
+  const [kfwZinsOverride, setKfwZinsOverride] = useState(konditionen.kfw300.zins);
+
+  const result = useMemo(() => berechneFinanzierung(modus, {
+    haushaltsnetto, zuVersteuerndesEinkommen, eigenkapital, maxRate, hauspreis,
+    erwachsene, bestehendeKreditraten,
+    nebenkostenQ, tilgung, zinsbindung, wertentwicklung,
+    // Bei bestehendem Wohneigentum: KfW 300 ist nicht förderfähig
+    foerdermittelAktiv,
+    bestehendesWohneigentum,  // gibt direkt durch — wird in pruefeKfW300 ausgewertet
+    kinder, klimaNeubau, qng,
+    bankzinsOverride: bankzinsManuell ? bankzinsOverride : null,
+    kfwZinsOverride: kfwZinsManuell ? kfwZinsOverride : null,
+  }, aktiveKonditionen), [modus, haushaltsnetto, zuVersteuerndesEinkommen, eigenkapital, maxRate, hauspreis, erwachsene, bestehendeKreditraten, nebenkostenQ, tilgung, zinsbindung, wertentwicklung, foerdermittelAktiv, kinder, klimaNeubau, qng, bestehendesWohneigentum, bankzinsManuell, bankzinsOverride, kfwZinsManuell, kfwZinsOverride, aktiveKonditionen]);
+
+  // Aktuelle Einkommensgrenze für UI-Hinweis berechnen
+  const einkommensgrenzeAktuell = useMemo(() => {
+    if (kinder < 1) return null;
+    const stufe = konditionen.kfw300.staffelung[Math.min(kinder, 5)];
+    let g = stufe.maxEinkommen;
+    if (kinder > 5) g += (kinder - 5) * konditionen.kfw300.einkommensgrenzeProWeiteremKind;
+    return g;
+  }, [kinder]);
+
+  return (
+    <>
+    <div className="min-h-screen bg-cream font-sans text-ink-800 no-print">
+      {/* ============ NAVI-BAR mit Wortmarke ============ */}
+      <nav className="sticky top-0 z-50 bg-white/85 backdrop-blur-md border-b border-stone-200/70">
+        <div className="max-w-6xl mx-auto px-5 lg:px-8 h-20 flex items-center justify-between">
+          {/* Wortmarke — CEB klein, Bankshop groß, AG klein + Zusatz darunter */}
+          <a href="/" className="group">
+            <div className="flex items-baseline gap-1">
+              <span className="font-sans text-2xl lg:text-3xl font-extrabold tracking-tight text-navy leading-none">SCAN<span className="text-gold">HAUS</span></span>
+            </div>
+            <div className="text-[10px] lg:text-[11px] font-semibold tracking-[0.18em] uppercase text-ink-400 mt-1">
+              Erst bauen – dann zahlen
+            </div>
+          </a>
+          {/* Rechts in der Navi: nur Claim oder leer (Hausverkäufer-Info kommt separat) */}
+          {!(vermittler.hausbaufirma || vermittler.hausverkaeufer) && (
+            <div className="hidden md:block text-xs font-medium tracking-widest uppercase text-ink-400">
+              {konditionen.anbieter.claim}
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {/* ============ HAUSVERKÄUFER-LEISTE — prominent, mobile + desktop ============ */}
+      {(vermittler.hausbaufirma || vermittler.hausverkaeufer) && (
+        <div className="bg-gradient-to-r from-navy via-navy-2 to-navy text-white border-b border-navy">
+          <div className="max-w-6xl mx-auto px-5 lg:px-8 py-3 lg:py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-gold/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 21h18M5 21V7l8-4 8 4v14M9 21V11h6v10"/>
+                  </svg>
+                </div>
+                <div>
+                  {vermittler.hausbaufirma && (
+                    <>
+                      <div className="text-[10px] font-semibold tracking-widest uppercase text-gold">Ein Service von</div>
+                      <div className="text-base lg:text-lg font-semibold text-white leading-tight">{vermittler.hausbaufirma}</div>
+                    </>
+                  )}
+                  {!vermittler.hausbaufirma && vermittler.hausverkaeufer && (
+                    <>
+                      <div className="text-[10px] font-semibold tracking-widest uppercase text-gold">Ihr Ansprechpartner</div>
+                      <div className="text-base lg:text-lg font-semibold text-white leading-tight">{vermittler.hausverkaeufer}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+              {vermittler.hausbaufirma && vermittler.hausverkaeufer && (
+                <div className="sm:text-right ml-12 sm:ml-0">
+                  <div className="text-[10px] font-semibold tracking-widest uppercase text-white/50">Ihr Ansprechpartner</div>
+                  <div className="text-sm lg:text-base font-medium text-white leading-tight">{vermittler.hausverkaeufer}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HERO */}
+      <header className="relative overflow-hidden bg-gradient-to-b from-white via-cream to-cream">
+        <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #0b1d3a 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-radial from-gold/10 to-transparent blur-3xl pointer-events-none" />
+        <div className="relative max-w-6xl mx-auto px-5 lg:px-8 pt-12 lg:pt-20 pb-8 lg:pb-12 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 mb-6 bg-white border border-stone-200 rounded-full text-xs font-semibold text-ink-700 shadow-sm">
+            <span className="relative flex w-2 h-2">
+              <span className="absolute inset-0 rounded-full bg-green-500 animate-ping opacity-50" />
+              <span className="relative rounded-full w-2 h-2 bg-green-500" />
+            </span>
+            Finanzierungs-Navigator · Neubau
+          </div>
+          <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-normal text-navy leading-[1.1] tracking-tight max-w-4xl mx-auto">
+            Ihr digitaler Hausbau- und Finanzierungscheck.
+          </h1>
+          <p className="mt-5 text-lg text-ink-600 max-w-2xl mx-auto leading-relaxed">
+            Kalkulieren Sie in wenigen Minuten Ihr mögliches Hausbudget, die monatliche Rate, Ihre KfW-300-Förderung und den Vermögensaufbau — übersichtlich, mit aktuellen Konditionen, unverbindlich.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs">
+            <div className="px-3 py-1.5 bg-white border border-stone-200 rounded-full text-ink-600"><span className="font-semibold text-navy">750+</span> Bankenpartner</div>
+            <div className="px-3 py-1.5 bg-white border border-stone-200 rounded-full text-ink-600">KfW 300 integriert</div>
+          </div>
+        </div>
+      </header>
+
+      {/* MODUS-WAHL */}
+      <Section eyebrow="Schritt 1" title="Was möchten Sie wissen?">
+        <div className="grid md:grid-cols-2 gap-4">
+          {[
+            { id: 'budget', titel: 'Was kann ich mir leisten?', text: 'Vom Einkommen zum möglichen Hausbudget.', icon: 'M3 21h18M5 21V7l8-4 8 4v14M9 21V11h6v10' },
+            { id: 'haus', titel: 'Passt dieses Haus zu mir?', text: 'Vom Kaufpreis zur nötigen Einkommensbasis.', icon: 'M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' },
+          ].map(m => (
+            <button key={m.id} onClick={() => setModus(m.id)}
+              className={`group relative p-6 lg:p-8 rounded-3xl border-2 text-left transition-all ${modus === m.id ? 'border-navy bg-white shadow-lg -translate-y-0.5' : 'border-stone-200 bg-white/60 hover:border-stone-300 hover:-translate-y-0.5'}`}>
+              {modus === m.id && (
+                <div className="absolute top-5 right-5 w-7 h-7 rounded-full bg-navy flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+              )}
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 transition-colors ${modus === m.id ? 'bg-navy text-white' : 'bg-stone-100 text-navy'}`}>
+                <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={m.icon}/></svg>
+              </div>
+              <h3 className="font-display text-xl lg:text-2xl font-semibold text-navy mb-1.5">{m.titel}</h3>
+              <p className="text-sm text-ink-500">{m.text}</p>
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      {/* SCHNELLÜBERSICHT */}
+      <section className="px-5 lg:px-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy via-navy-2 to-navy p-6 lg:p-10 text-white shadow-2xl">
+            <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-gold/15 blur-3xl" />
+            <div className="absolute -bottom-20 -left-20 w-80 h-80 rounded-full bg-green-500/10 blur-3xl" />
+            <div className="relative">
+              <div className="text-xs font-semibold tracking-widest uppercase text-white/50 mb-2">Schnellübersicht — Ihre Ersteinschätzung</div>
+              <div className="grid lg:grid-cols-2 gap-6 lg:gap-10 mb-8">
+                <div>
+                  <div className="text-sm text-white/60 mb-1">{modus === 'budget' ? 'Mögliches Hausbudget' : 'Hauspreis'}</div>
+                  <div className="font-display text-5xl lg:text-6xl font-semibold tracking-tight tabular-nums">{fmtEUR(result.budget)}</div>
+                  <div className="text-sm text-white/50 mt-1">inkl. Kaufnebenkosten</div>
+                </div>
+                <div>
+                  <div className="text-sm text-white/60 mb-1">{modus === 'budget' ? 'Monatliche Rate' : 'Erforderliches Haushaltsnetto'}</div>
+                  <div className="font-display text-5xl lg:text-6xl font-semibold tracking-tight tabular-nums text-gold">
+                    {modus === 'budget' ? fmtEUR(result.monatlicheRate) : fmtEUR(result.benoetigtesNetto)}
+                  </div>
+                  <div className="text-sm text-white/50 mt-1">
+                    {modus === 'budget' ? 'Zins & Tilgung (Mischzins)' : `Bei einer Rate von ${fmtEUR(result.monatlicheRate)}`}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+                {[
+                  { lbl: 'Mischzins', val: fmtPct(result.mischzins, 2) },
+                  { lbl: 'KfW-Fördervorteil', val: fmtEUR(result.foerdervorteil), accent: true },
+                  { lbl: 'Restschuld in 10 J.', val: fmtEUR(result.restschuld10) },
+                  { lbl: 'Wert in 10 J.', val: fmtEUR(result.wert10), accent: true },
+                ].map((s, i) => (
+                  <div key={i} className="px-4 py-3 bg-white/[0.06] backdrop-blur-sm border border-white/10 rounded-xl">
+                    <div className="text-[10px] font-semibold tracking-widest uppercase text-white/50 mb-1">{s.lbl}</div>
+                    <div className={`font-display text-lg lg:text-xl font-semibold tabular-nums ${s.accent ? 'text-gold' : 'text-white'}`}>{s.val}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============ SCANHAUS-AIRBAG (ausklappbar) ============ */}
+      <AirbagModul rate={result.monatlicheRate} />
+
+      {/* EINGABEN */}
+      <Section eyebrow="Schritt 2" title="Ihre Eckdaten">
+        <div className="bg-white border border-stone-200 rounded-3xl p-6 lg:p-10 shadow-sm">
+
+          {/* ===== Block 1: Vorhaben ===== */}
+          <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-5">Ihr Vorhaben</div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {modus === 'budget' ? (
+              <React.Fragment>
+                <NumberInput label="Haushaltsnettoeinkommen" value={haushaltsnetto} suffix="€" placeholder="4.500" onChange={setHaushaltsnetto} hint="monatlich" />
+                <NumberInput label="Vorhandenes Eigenkapital" value={eigenkapital} suffix="€" placeholder="80.000" onChange={setEigenkapital} />
+                <NumberInput label="Gewünschte max. Monatsrate" value={maxRate} suffix="€" placeholder="1.400" onChange={setMaxRate} hint="optional" />
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <NumberInput label="Hauspreis" value={hauspreis} suffix="€" placeholder="450.000" onChange={setHauspreis} />
+                <NumberInput label="Vorhandenes Eigenkapital" value={eigenkapital} suffix="€" placeholder="80.000" onChange={setEigenkapital} />
+                <NumberInput label="Haushaltsnettoeinkommen" value={haushaltsnetto} suffix="€" placeholder="4.500" onChange={setHaushaltsnetto} hint="monatlich" />
+              </React.Fragment>
+            )}
+          </div>
+
+          {/* ===== Block 2: Haushalt ===== */}
+          <div className="mt-8 lg:mt-10 pt-8 border-t border-stone-200">
+            <div className="flex items-baseline justify-between mb-5">
+              <div className="text-xs font-bold tracking-widest uppercase text-stone-500">Ihr Haushalt</div>
+              <div className="text-xs text-ink-400">für die Tragfähigkeitsprüfung</div>
+            </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              <Counter label="Erwachsene im Haushalt" value={erwachsene} min={1} max={4} onChange={setErwachsene} />
+              <Counter label="Kinder unter 18" value={kinder} min={0} max={8} onChange={setKinder} />
+              <NumberInput label="Bestehende Kreditraten" value={bestehendeKreditraten} suffix="€" placeholder="0" onChange={setBestehendeKreditraten} hint="Auto, Konsum etc. (monatlich)" />
+            </div>
+          </div>
+
+          {/* KfW-spezifische Eingabe — nur sichtbar wenn KfW grundsätzlich passt */}
+          {kinder >= 1 && klimaNeubau && foerdermittelAktiv && (
+            <div className="mt-6 p-5 bg-gold/5 border border-gold/20 rounded-2xl">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-gold/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4 text-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-navy">Zu versteuerndes Haushaltseinkommen (Jahr)</div>
+                  <div className="text-xs text-ink-500 mt-0.5">Für die KfW-300-Prüfung — Durchschnitt der letzten 2 Steuerbescheide. Aktuelle Grenze bei {kinder} Kind{kinder !== 1 ? 'ern' : ''}: <strong className="text-navy">{fmtEUR(einkommensgrenzeAktuell || 0)}</strong></div>
+                </div>
+              </div>
+              <NumberInput label="" value={zuVersteuerndesEinkommen} suffix="€" placeholder="80.000" onChange={setZuVersteuerndesEinkommen} />
+            </div>
+          )}
+
+          {/* ===== Block 3: Finanzierungs-Parameter ===== */}
+          <div className="mt-8 lg:mt-10 pt-8 border-t border-stone-200">
+            <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-5">Finanzierungs-Parameter</div>
+            <div className="grid md:grid-cols-2 gap-x-10 gap-y-7">
+              <Slider label="Anfangstilgung" value={tilgung} min={1} max={5} step={0.1} suffix="%" onChange={setTilgung} hint="p.a." />
+              <Slider label="Kaufnebenkosten" value={nebenkostenQ} min={0} max={15} step={0.5} suffix="%" onChange={setNebenkostenQ} hint="vom Kaufpreis" />
+              <div className="space-y-3">
+                <div className="flex items-baseline justify-between">
+                  <label className="text-sm font-medium text-ink-700">Sollzinsbindung</label>
+                  <div className="font-display text-xl font-semibold text-navy">{zinsbindung}<span className="text-sm font-sans font-normal text-ink-500 ml-1">Jahre</span></div>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {[5, 10, 15, 20, 30].map(z => (
+                    <button key={z} onClick={() => setZinsbindung(z)}
+                      className={`py-2.5 text-sm font-semibold rounded-xl border transition-all ${zinsbindung === z ? 'bg-navy text-white border-navy' : 'bg-white text-ink-700 border-stone-200 hover:border-stone-300'}`}>{z}J</button>
+                  ))}
+                </div>
+              </div>
+              <Slider label="Angenommene Wertentwicklung" value={wertentwicklung} min={0} max={5} step={0.1} suffix="% p.a." onChange={setWertentwicklung} hint="der Immobilie" />
+            </div>
+
+            {/* Bankzins manuell überschreiben — für individuelle Konditionen */}
+            <div className={`mt-6 rounded-2xl border transition-all ${bankzinsManuell ? 'bg-navy/[0.03] border-navy/30 p-5' : 'bg-stone-50 border-stone-200 p-4'}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-navy">Bankzins manuell anpassen</div>
+                  <div className="text-xs text-ink-500 mt-0.5">
+                    {bankzinsManuell
+                      ? `Manueller Wert wird verwendet. Standard wäre ${fmtPct(aktiveKonditionen.bankzinsen[zinsbindung] ?? aktiveKonditionen.bankzinsen[10], 2)} bei ${zinsbindung} Jahren Zinsbindung.`
+                      : `Aktuell wird der hinterlegte Marktzins verwendet (${fmtPct(aktiveKonditionen.bankzinsen[zinsbindung] ?? aktiveKonditionen.bankzinsen[10], 2)}). Aktivieren, um einen eigenen Wert einzugeben.`}
+                  </div>
+                </div>
+                <button type="button"
+                  onClick={() => {
+                    if (!bankzinsManuell) {
+                      setBankzinsOverride(aktiveKonditionen.bankzinsen[zinsbindung] ?? aktiveKonditionen.bankzinsen[10]);
+                    }
+                    setBankzinsManuell(!bankzinsManuell);
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${bankzinsManuell ? 'bg-navy' : 'bg-stone-300'}`}>
+                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${bankzinsManuell ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              {bankzinsManuell && (
+                <div className="mt-5 pt-5 border-t border-navy/15">
+                  <Slider label="Sollzins Bankdarlehen" value={bankzinsOverride} min={1} max={8} step={0.05} suffix="% p.a." onChange={setBankzinsOverride} hint="individueller Wert" />
+                </div>
+              )}
+            </div>
+
+            {/* KfW-Zins manuell überschreiben — für aktuelle KfW-Konditionen */}
+            <div className={`mt-4 rounded-2xl border transition-all ${kfwZinsManuell ? 'bg-gold/[0.04] border-gold/40 p-5' : 'bg-stone-50 border-stone-200 p-4'}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-navy">KfW-Zins manuell anpassen</div>
+                  <div className="text-xs text-ink-500 mt-0.5">
+                    {kfwZinsManuell
+                      ? `Manueller Wert wird verwendet. Standard wäre ${fmtPct(result.kfwGenutzt ? result.kfwGenutzt.zins : (aktiveKonditionen.kfw300.zins), 2)} für das aktuell gewählte KfW-Programm.`
+                      : `Aktuell wird der hinterlegte KfW-Zins verwendet (${fmtPct(result.foerderbetrag > 0 && result.kfwGenutzt ? result.kfwGenutzt.zins : aktiveKonditionen.kfw300.zins, 2)}). Aktivieren, um den tagesaktuellen KfW-Zins einzugeben.`}
+                  </div>
+                </div>
+                <button type="button"
+                  onClick={() => {
+                    if (!kfwZinsManuell) {
+                      const standardZins = result.foerderbetrag > 0 && result.kfwGenutzt
+                        ? result.kfwGenutzt.zins
+                        : aktiveKonditionen.kfw300.zins;
+                      setKfwZinsOverride(standardZins);
+                    }
+                    setKfwZinsManuell(!kfwZinsManuell);
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${kfwZinsManuell ? 'bg-gold' : 'bg-stone-300'}`}>
+                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${kfwZinsManuell ? 'left-6' : 'left-1'}`} />
+                </button>
+              </div>
+              {kfwZinsManuell && (
+                <div className="mt-5 pt-5 border-t border-gold/20">
+                  <Slider label="Sollzins KfW-Förderdarlehen" value={kfwZinsOverride} min={0} max={5} step={0.01} suffix="% p.a." onChange={setKfwZinsOverride} hint="tagesaktueller KfW-Zins (von kfw.de)" />
+                  <div className="mt-3 p-3 bg-white/60 border border-gold/20 rounded-xl text-xs text-ink-600 leading-relaxed">
+                    💡 <strong className="text-navy">Tipp:</strong> Aktuelle KfW-Konditionen finden Sie auf <a href="https://www.kfw.de/inlandsfoerderung/Privatpersonen/Neubau/" target="_blank" rel="noopener noreferrer" className="text-gold-dark underline">kfw.de</a>. Der Wert gilt für das gerade gewählte KfW-Programm (KfW 300 oder 297/298).
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 lg:mt-10 pt-8 border-t border-stone-200">
+            <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-5">KfW-Förderung &amp; Standard</div>
+
+            {/* Vorab-Frage: Bestehendes Wohneigentum */}
+            <div className="mb-5">
+              <label className="text-sm font-medium text-ink-700 mb-2 block">
+                Besitzen Sie bereits Wohneigentum in Deutschland?
+              </label>
+              <div className="text-xs text-ink-400 mb-3">
+                Wichtig für die Auswahl der passenden KfW-Förderung.
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <button type="button" onClick={() => setBestehendesWohneigentum(false)}
+                  className={`p-4 rounded-2xl border text-left transition-all ${!bestehendesWohneigentum ? 'border-navy bg-navy/[0.03]' : 'border-stone-200 bg-white hover:border-stone-300'}`}>
+                  <div className="font-semibold text-navy text-sm mb-0.5">Nein, kein Wohneigentum</div>
+                  <div className="text-xs text-ink-500">KfW 300 mit höheren Förderbeträgen möglich</div>
+                </button>
+                <button type="button" onClick={() => setBestehendesWohneigentum(true)}
+                  className={`p-4 rounded-2xl border text-left transition-all ${bestehendesWohneigentum ? 'border-gold bg-gold/5' : 'border-stone-200 bg-white hover:border-stone-300'}`}>
+                  <div className="font-semibold text-navy text-sm mb-0.5">Ja, bestehendes Wohneigentum</div>
+                  <div className="text-xs text-ink-500">Alternative KfW 297/298 wird genutzt</div>
+                </button>
+              </div>
+              {bestehendesWohneigentum && (
+                <div className="mt-3 p-4 bg-gold/5 border border-gold/30 rounded-2xl">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-gold-dark flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="16" x2="12" y2="12"/>
+                      <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <div className="text-sm text-ink-700 leading-relaxed">
+                      <strong className="text-navy">Alternative KfW 297/298 „Klimafreundlicher Neubau":</strong> Da Sie bereits Wohneigentum besitzen, ist die KfW 300 nicht möglich.
+                      Stattdessen greift das Programm KfW 297/298 — bis zu 150.000 € zu aktuell nur 0,60 % Sollzins (mit QNG-Siegel). Keine Einkommensgrenze, keine Familienbeschränkung. Voraussetzung: klimafreundlicher Neubau (Effizienzhaus 40 oder 55).
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-3">
+              <Toggle label="KfW-Förderung einbeziehen" value={foerdermittelAktiv} onChange={setFoerdermittelAktiv} hint={bestehendesWohneigentum ? 'KfW 297/298 (klimafreundlich)' : 'KfW 300 oder 297/298'} />
+              <Toggle label="Klimafreundlicher Neubau" value={klimaNeubau} onChange={setKlimaNeubau} hint="Effizienzhaus 40, KfW-Voraussetzung" disabled={!foerdermittelAktiv} />
+              <Toggle label="QNG-Siegel" value={qng} onChange={setQng} hint="erhöht max. Förderbetrag" disabled={!foerdermittelAktiv || !klimaNeubau} />
+            </div>
+
+            {/* Einliegerwohnung — dezenter Hinweis */}
+            {foerdermittelAktiv && klimaNeubau && (
+              <div className="mt-5 p-4 bg-stone-50 border border-stone-200 rounded-2xl">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gold/15 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9.5 12 2l9 7.5V20a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2V9.5z"/>
+                    </svg>
+                  </div>
+                  <div className="flex-1 text-sm text-ink-700 leading-relaxed">
+                    <strong className="text-navy">Planen Sie eine Einliegerwohnung?</strong> Dann ist eine doppelte KfW-Förderung möglich,
+                    weil das Programm pro Wohneinheit gewährt wird. <span className="text-ink-500">Sprechen Sie uns an — wir prüfen Ihre individuelle Konstellation.</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </Section>
+
+      {/* ERGEBNIS-DETAILS */}
+      <Section eyebrow="Schritt 3" title="Ihre Finanzierungsstruktur" className="bg-navy/5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 mb-8">
+          <StatCard label="Bankdarlehen" value={fmtEUR(result.bankdarlehen)} sub={`zu ${fmtPct(result.bankzins, 2)} Sollzins${bankzinsManuell ? ' (manuell)' : ''}`} />
+          <StatCard
+            label={result.kfwGenutzt?.key === 'kfw_297' ? 'KfW 297/298' : 'KfW 300'}
+            value={result.foerderbetrag > 0 ? fmtEUR(result.foerderbetrag) : '—'}
+            sub={result.foerderbetrag > 0 ? `zu ${fmtPct(result.kfwGenutzt.zins, 2)} Sollzins` : 'aktuell nicht möglich'}
+            accent="accent" />
+          <StatCard label="Eigenkapitalquote" value={fmtPct(result.eigenkapitalquote)} sub={`Finanzierung: ${fmtPct(result.finanzierungsquote)}`} accent="success" />
+          <StatCard label="Geschätzte Laufzeit" value={`${isFinite(result.laufzeitJahre) ? result.laufzeitJahre.toFixed(1) : '–'} J.`} sub="bis zur Volltilgung" />
+        </div>
+
+        {/* Haushaltsrechnung — Transparenz für Nutzer */}
+        <div className="mb-8">
+          <HaushaltsCard result={result} />
+        </div>
+
+        {/* KfW 300 Card */}
+        <div className="mb-8">
+          <KfW300Card result={result} />
+        </div>
+
+        {/* Visuelle Finanzierungsstruktur */}
+        <div className="bg-white border border-stone-200 rounded-3xl p-6 lg:p-8 mb-8">
+          <div className="mb-5">
+            <div className="font-display text-xl font-semibold text-navy">Wie sich Ihre Finanzierung zusammensetzt</div>
+            <div className="text-sm text-ink-500 mt-0.5">Gesamtbedarf: {fmtEUR(result.gesamtdarlehen + (result.eingaben.eigenkapital || 0))}</div>
+          </div>
+          <FinanzierungsBar
+            eigenkapital={result.eingaben.eigenkapital || 0}
+            bankdarlehen={result.bankdarlehen}
+            foerderbetrag={result.foerderbetrag}
+            gesamtbedarf={result.gesamtdarlehen + (result.eingaben.eigenkapital || 0)} />
+        </div>
+
+        <VerlaufsChart darlehen={result.gesamtdarlehen} mischzinsP={result.mischzins} tilgungP={tilgung} kaufpreis={result.budget} wertentwicklungP={wertentwicklung} />
+
+        <div className="mt-8 grid md:grid-cols-2 gap-4">
+          <div className="bg-white border border-stone-200 rounded-3xl p-6 lg:p-7">
+            <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-4">In 10 Jahren</div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-baseline"><span className="text-sm text-ink-600">Immobilienwert</span><span className="font-display text-xl font-semibold text-navy tabular-nums">{fmtEUR(result.wert10)}</span></div>
+              <div className="flex justify-between items-baseline"><span className="text-sm text-ink-600">Restschuld</span><span className="font-display text-xl font-semibold text-rose-700 tabular-nums">−{fmtEUR(result.restschuld10)}</span></div>
+              <div className="flex justify-between items-baseline pt-3 border-t border-stone-200"><span className="text-sm font-semibold text-navy">Rechn. Nettovermögen</span><span className="font-display text-2xl font-semibold text-green-700 tabular-nums">{fmtEUR(result.nettovermoegen10)}</span></div>
+            </div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-3xl p-6 lg:p-7">
+            <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-4">In 20 Jahren</div>
+            <div className="space-y-3">
+              <div className="flex justify-between items-baseline"><span className="text-sm text-ink-600">Immobilienwert</span><span className="font-display text-xl font-semibold text-navy tabular-nums">{fmtEUR(result.wert20)}</span></div>
+              <div className="flex justify-between items-baseline"><span className="text-sm text-ink-600">Restschuld</span><span className="font-display text-xl font-semibold text-rose-700 tabular-nums">−{fmtEUR(result.restschuld20)}</span></div>
+              <div className="flex justify-between items-baseline pt-3 border-t border-stone-200"><span className="text-sm font-semibold text-navy">Rechn. Nettovermögen</span><span className="font-display text-2xl font-semibold text-green-700 tabular-nums">{fmtEUR(result.nettovermoegen20)}</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* PDF-Vorschlag-Button */}
+        <div className="mt-8 no-print">
+          <div className="bg-gradient-to-br from-stone-50 to-cream border border-stone-200 rounded-3xl p-6 lg:p-8">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+              <div className="flex items-start gap-4 flex-1">
+                <div className="w-12 h-12 rounded-2xl bg-gold/15 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="9" y1="15" x2="15" y2="15"/>
+                    <line x1="9" y1="18" x2="15" y2="18"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <div className="font-display text-xl font-semibold text-navy mb-1">Finanzierungsvorschlag als PDF</div>
+                  <div className="text-sm text-ink-600 leading-relaxed">
+                    Erstellen Sie ein professionelles Übergabe-Dokument mit allen Eckdaten Ihres Bauvorhabens — ideal für die Übergabe an Bauherren oder Banken.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setPdfModalOffen(true)}
+                className="flex-shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-semibold text-white bg-navy hover:bg-navy-2 rounded-2xl transition-all shadow-md hover:shadow-lg whitespace-nowrap"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Vorschlag erstellen
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8"><AmpelBox state={result.ampel} text={result.ampelText} /></div>
+      </Section>
+
+      {/* CTA */}
+      <section className="px-5 lg:px-8 pb-16 lg:pb-24">
+        <div className="max-w-6xl mx-auto">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy via-navy-2 to-navy text-white p-8 lg:p-14 text-center shadow-2xl">
+            <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-gold/15 blur-3xl" />
+            <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-green-500/10 blur-3xl" />
+            <div className="relative max-w-2xl mx-auto">
+              <div className="text-xs font-semibold tracking-widest uppercase text-gold mb-3">Ihr nächster Schritt</div>
+              <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-medium tracking-tight leading-tight mb-4">
+                In <em className="italic text-gold">48 Stunden</em> zur passenden Finanzierung.
+              </h2>
+              <p className="text-white/70 text-lg leading-relaxed mb-8 max-w-xl mx-auto">{konditionen.ui.cta.hinweis}</p>
+
+              {/* Finanzierer-Block — erscheint nur wenn eingetragen */}
+              {vermittler.finanziererName && (
+                <div className="mb-8 inline-block bg-white/[0.06] backdrop-blur-sm border border-white/15 rounded-2xl px-6 py-4 text-left">
+                  <div className="text-[10px] font-semibold tracking-widest uppercase text-gold mb-1">Ihr persönlicher Finanzierer</div>
+                  <div className="font-semibold text-white text-base">{vermittler.finanziererName}</div>
+                  {vermittler.finanziererTelefon && (
+                    <a href={`tel:${vermittler.finanziererTelefon.replace(/[^\d+]/g, '')}`}
+                      className="inline-flex items-center gap-1.5 text-sm text-white/80 hover:text-white transition-colors mt-1">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                      {vermittler.finanziererTelefon}
+                    </a>
+                  )}
+                </div>
+              )}
+
+              <a href={vermittler.cta_url || konditionen.ui.cta.url}
+                className="inline-flex items-center gap-3 px-8 lg:px-10 py-5 bg-white text-navy font-bold text-base lg:text-lg rounded-full hover:scale-[1.02] hover:shadow-2xl hover:shadow-gold/30 transition-all">
+                {konditionen.ui.cta.label}
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </a>
+              <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/60">
+                <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>Über 750 Banken im Vergleich</div>
+                <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>Ihre Hausbank auf Wunsch dabei</div>
+                <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>Antwort in 48 Stunden</div>
+                <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 6 9 17l-5-5"/></svg>Kostenfrei &amp; unverbindlich</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="border-t border-stone-200 bg-white">
+        <div className="max-w-6xl mx-auto px-5 lg:px-8 py-12">
+          {/* Footer-Hauptbereich: 3 Spalten */}
+          <div className="grid md:grid-cols-3 gap-8 lg:gap-12 mb-10">
+            {/* Spalte 1: Wortmarke + Kurztext */}
+            <div>
+              <div className="mb-3">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xs font-semibold tracking-[0.2em] uppercase text-ink-500">CEB</span>
+                  <span className="font-display text-2xl font-semibold tracking-tight text-navy leading-none">Bankshop</span>
+                  <span className="text-xs font-medium tracking-widest uppercase text-ink-500">AG</span>
+                </div>
+                <div className="text-[10px] font-medium tracking-wider uppercase text-ink-400 mt-1">
+                  Vermittlung von Bankdienstleistungen
+                </div>
+              </div>
+              <p className="text-sm text-ink-500 leading-relaxed mb-3">
+                Ihr unabhängiger Partner für Baufinanzierung mit Zugang zu über 750 Banken.
+              </p>
+              <p className="text-xs text-ink-400 leading-relaxed">
+                Hauptverwaltung Leipzig — Über 285.000 Kunden seit 2006.
+              </p>
+            </div>
+
+            {/* Spalte 2: Kontakt */}
+            <div>
+              <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-3">Kontakt</div>
+              <div className="space-y-1.5 text-sm text-ink-600">
+                <div>{konditionen.anbieter.adresse.strasse}</div>
+                <div>{konditionen.anbieter.adresse.plzOrt}</div>
+                <div className="pt-2">Tel. {konditionen.anbieter.telefon}</div>
+                <div>Fax {konditionen.anbieter.telefax}</div>
+                <a href={`mailto:${konditionen.anbieter.email}`} className="block text-navy hover:underline">{konditionen.anbieter.email}</a>
+              </div>
+            </div>
+
+            {/* Spalte 3: Pflichtangaben & Links */}
+            <div>
+              <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-3">Unternehmen</div>
+              <div className="space-y-1.5 text-sm text-ink-600">
+                <div><span className="text-ink-400">Vorstand:</span> {konditionen.anbieter.vorstand}</div>
+                <div><span className="text-ink-400">Aufsichtsrat:</span> {konditionen.anbieter.aufsichtsrat}</div>
+                <div className="text-xs text-ink-500 pt-1">{konditionen.anbieter.handelsregister}</div>
+                <div className="text-xs text-ink-500">Steuer-Nr.: {konditionen.anbieter.steuerNr}</div>
+                <div className="pt-3 flex gap-4">
+                  <a href={konditionen.anbieter.impressumUrl} target="_blank" rel="noopener noreferrer" className="text-ink-600 hover:text-navy transition-colors">Impressum</a>
+                  <a href={konditionen.anbieter.datenschutzUrl} target="_blank" rel="noopener noreferrer" className="text-ink-600 hover:text-navy transition-colors">Datenschutz</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* § 34i GewO — Pflichtangabe für Immobiliardarlehensvermittler */}
+          <div className="pt-8 border-t border-stone-200 mb-6">
+            <div className="text-xs font-bold tracking-widest uppercase text-stone-500 mb-2">Erlaubnis &amp; Registrierung</div>
+            <p className="text-xs text-ink-500 leading-relaxed">
+              <strong className="text-ink-700">Statusinformation nach § 34i GewO:</strong> {konditionen.anbieter.erlaubnisHinweis}.
+              Registrierungsnummer <strong className="text-ink-700">{konditionen.anbieter.registrierungsnummer}</strong>.
+              Zuständige Erlaubnisbehörde: {konditionen.anbieter.erlaubnisbehoerde}. Zuständige Registerbehörde: {konditionen.anbieter.registerbehoerde}.
+              Außergerichtliche Streitbeilegung: {konditionen.anbieter.schlichtungsstelle}.
+            </p>
+          </div>
+
+          {/* Disclaimer + Copyright */}
+          <div className="pt-6 border-t border-stone-200 space-y-3">
+            <p className="text-xs text-ink-400 leading-relaxed">
+              <strong className="text-ink-600">Wichtiger Hinweis:</strong> Diese Berechnung ist eine unverbindliche Ersteinschätzung und ersetzt keine individuelle Finanzierungsprüfung. Förderbeträge, Zinssätze und Konditionen können sich täglich ändern. Die angenommene Wertentwicklung ist keine Prognose, sondern eine reine Modellannahme. Eine konkrete Förderzusage für die KfW 300 erfolgt ausschließlich durch die KfW, vorbehaltlich finaler Prüfung.
+            </p>
+            <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-ink-400">
+              <span>Berechnung auf Basis der Konditionen vom <strong className="text-ink-600">{fmtDate(aktiveKonditionen.stand)}</strong>.</span>
+              <span>© {new Date().getFullYear()} {konditionen.anbieter.name} – {konditionen.anbieter.nameZusatz}. Alle Rechte vorbehalten.</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      {/* PDF-Modal */}
+      <PdfModalEingabe
+        offen={pdfModalOffen}
+        onClose={() => setPdfModalOffen(false)}
+        daten={{ kaeufer: pdfKaeufer, objektAdresse: pdfObjektAdresse, baujahr: pdfBaujahr, wohnflaeche: pdfWohnflaeche, notizen: pdfNotizen }}
+        setDaten={(d) => { setPdfKaeufer(d.kaeufer); setPdfObjektAdresse(d.objektAdresse); setPdfBaujahr(d.baujahr); setPdfWohnflaeche(d.wohnflaeche); setPdfNotizen(d.notizen); }}
+        onErstellen={() => { setPdfModalOffen(false); setTimeout(() => window.print(), 250); }}
+      />
+    </div>
+
+    {/* Druckansicht für PDF — außerhalb der no-print-Hülle, damit sie beim Drucken sichtbar bleibt */}
+    <PdfPrintView
+      result={result}
+      eingaben={{
+        hauspreis, eigenkapital, nebenkostenQ, tilgung, zinsbindung,
+        haushaltsnetto, wertentwicklungP: wertentwicklung,
+      }}
+      kundenDaten={{ kaeufer: pdfKaeufer, objektAdresse: pdfObjektAdresse, baujahr: pdfBaujahr, wohnflaeche: pdfWohnflaeche, notizen: pdfNotizen }}
+      vermittler={{
+        hf: vermittler.hausbaufirma,
+        hv: vermittler.hausverkaeufer,
+        t: vermittler.hausverkaeuferTelefon,
+        email: vermittler.hausverkaeuferEmail,
+        fn: vermittler.finanziererName,
+        ft: vermittler.finanziererTelefon,
+      }}
+      konditionen={aktiveKonditionen}
+      datum={aktiveKonditionen.stand}
+    />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<FinanzierungsNavigator />);
+</script>
+</body>
+</html>
